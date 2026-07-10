@@ -101,3 +101,7 @@ That serves the game and multiplayer at `https://planetcrafter.<your-subdomain>.
 - Water/ice physics, weather as the atmosphere thickens
 - More creatures (flyers once the air is thick, swimmers after the melt), synced herd movement
 - Colony goals, per-biome plant species
+
+## License
+
+PlanetCrafter is free software, licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0-or-later) — see [LICENSE](LICENSE). In short: you may use, study, modify and share it, but if you run a modified version as a network service (e.g. host your own colony server), you must offer its source to your users under the same license.
