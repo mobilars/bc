@@ -620,7 +620,7 @@ function genChunk(cx,cz){
     for(let y=h+1;y<=SEA;y++) put(lx,y,lz, melted?WATER:4); // frozen or liquid lakes
     if(!lake&&!topCarved){
       const r=hash2(wx*13+71,wz*17+37);
-      if(r<.01) put(lx,h+1,lz,4);        // surface ice deposit
+      if(r<.01){ if(!melted) put(lx,h+1,lz,4); } // surface ice sublimates above 0°C
       else if(r<.018) put(lx,h+1,lz,2);  // boulder
     }
   }
