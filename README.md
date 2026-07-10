@@ -16,7 +16,7 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 |---|---|
 | `W A S D` / Mouse / `Space` | move, look, jump/swim |
 | Left / right click | mine (collects the block) / place |
-| `1`–`9` or scroll wheel | pick block |
+| `1`–`0` or scroll wheel | pick block |
 | `C` | craft the selected block |
 | `T` or `Enter` | chat (multiplayer) |
 | `G` | creative mode (infinite blocks) |
@@ -27,17 +27,40 @@ Crafting works on the *selected hotbar slot*: select lichen (`7`), and the hint 
 
 ### Terraforming
 
-- **Lichen** is crafted from ice + regolith. Plant it and it grows: lichen → moss → shrub → alien tree. Every living block adds **O₂**.
-- **Heaters** (rock + basalt) raise **temperature**; O₂ adds greenhouse warming on top.
-- Plants in a **sealed air pocket** (caves, glass domes) grow 3× faster, and the HUD shows the concentrated pocket O₂ when you stand inside one. The seal is literal — one open doorway leaks. There are no doors, so use a block as an airlock: seal the entrance behind you (glass makes a nice window) and mine it open to leave. Pockets over ~350 air blocks are too big to pressurize.
-- Milestones reshape the planet: above **0°C** the frozen lakes melt into open water; at **10% O₂** the air is breathable; at **12% O₂ + 5°C** the regolith itself turns green. The sky shifts from rust-dark to blue as the atmosphere thickens.
-- **Suit O₂**: until the planet is breathable, your suit tank drains slowly (~12 minutes per fill; faster underwater). Refill fast at the **crashed lander** at spawn — the glowing beacon on the cut-rock pad — or slowly inside a sealed pocket holding ≥10% O₂, which makes caves and greenhouses real outposts. Run dry and you black out, waking at the lander. The gauge sits bottom-right; once the atmosphere reaches 10% O₂ it reads AIR OK.
+The intended arc: **lichen first** (it tolerates any cold) → **heaters in a sealed, vented cave** to unlock real growth → a **glass-roofed greenhouse** full of trees becomes your breathable outpost → its oxygen and timber fund the **planet-scale forest** that finally turns the sky blue. Once the world is warm and breathable, culture **grazers** and let something live on it.
 
-The planet's O₂/temperature are computed deterministically from the shared block-edit list, so every player derives identical stats from the same data — terraforming needs no extra netcode.
+### Simulation rules
+
+The planet's O₂/temperature are computed deterministically from the shared block-edit list, so every player derives identical stats from the same data — terraforming needs no extra netcode. Grazer positions are the one exception: the *nest block* is shared data, the animal wandering around it is local and cosmetic.
+
+**Planet O₂** (HUD `O₂`, starts 0.2%, cap 21%)
+- Each living block adds O₂: canopy 0.0045%, shrub 0.0035%, moss 0.002%, lichen 0.0008%. A grown tree carries ~22 canopy → ~0.1% per tree → **~100 trees for breathable (10%)**.
+
+**Planet temperature** (HUD `temp`, starts −58°C, cap 28°C)
+- `temp = −58 + 3°C per heater anywhere + 1.6°C per 1% O₂` (greenhouse effect). So heaters bootstrap warming, then forests take over.
+
+**Milestones**: >0°C frozen lakes melt · ≥10% O₂ the open air is breathable · ≥12% O₂ and ≥5°C the regolith turns green. The sky lerps from rust-dark to blue with O₂.
+
+**Plant growth** — each planted block steps lichen → moss → shrub → tree at a base rate (~40s/60s/90s per step), scaled by:
+- **Temperature**: below **−5°C** growth is ~×0.03 (dormant); above it, ×0.7 scaling up to ×2.2 at 28°C. **Lichen is exempt** — it keeps a ×0.3 floor in any cold, so the first step always works.
+- **Enclosure ×3**: a sealed air pocket concentrates warmth and moisture.
+- **Local warmth**: plants in a sealed pocket use the *pocket's* temperature: **+6°C per heater sharing the pocket** (cap 35°C). Nine heaters lift a −58°C cave past the −5°C growth gate.
+- **Sunlight ×1 / ×0.5**: a plant is sunlit if the column straight above it holds only air or **glass** — windows are real. Windowless caves grow at half speed; a glass roof fixes that.
+
+**Air pockets** — a flood-fill from the air block above a plant (or from your head). Sealed = the flood neither reaches the sky nor exceeds **~800 air blocks**. One gap breaks the seal. Anything solid seals — including:
+- **Air vents** (2 timber + 1 glass → 2): airtight but walk-through. A vented doorway keeps the pocket pressurized with no airlock dance.
+- **Glass**: seals air *and* passes light — the greenhouse block.
+- Standing in a sealed pocket the HUD shows its concentrated stats: pocket O₂ = planet O₂ + **0.1% per plant block with air above it** (cap 24%) → **~a dozen trees make a pocket breathable**; pocket temp = planet temp + 6°C per heater.
+
+**Suit O₂** (gauge bottom-right; drains only when the local air is unbreathable)
+- Drain: **~8 minutes per tank** in dead air; much faster underwater. Refill: **lander** (fast), sealed pocket at ≥10% O₂ (slow), breathable planet air (trickle).
+- **<25%**: alarm pips + reddening screen edges. **<20%: exhausted** — you cannot mine or place blocks, walk at half speed, jump weakly. **<10%**: critical alarm. **0%**: blackout, revived at the lander.
+
+**Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
 
 ## How it works
 
-The client (`public/index.html`): raw WebGL 1 renderer (chunk meshing, translucent water pass, dynamic sky/fog), value-noise terrain with 3D-noise caves, procedural 20-tile texture atlas on a canvas, AABB physics, survival inventory + crafting, growth simulation with flood-fill enclosure detection, remote players as suited avatars with name tags. A world is just `seed + edit list`: single-player saves to `localStorage`, multiplayer worlds live on the server, and milestone changes (ice→water, verdant ground) regenerate terrain losslessly from that same data.
+The client (`public/index.html`): raw WebGL 1 renderer (chunk meshing, translucent water pass, dynamic sky/fog), value-noise terrain with 3D-noise caves, procedural 22-tile texture atlas on a canvas, AABB physics, survival inventory + crafting, growth simulation with flood-fill enclosure and skylight detection, remote players as suited avatars with name tags, wandering grazer critters. A world is just `seed + edit list`: single-player saves to `localStorage`, multiplayer worlds live on the server, and milestone changes (ice→water, verdant ground) regenerate terrain losslessly from that same data.
 
 The server (`src/server.js`): one Cloudflare Durable Object per colony stores the seed and edit history and relays edits/positions over WebSockets (hibernation API — idle worlds cost nothing). A singleton Lobby object tracks colonies for the `/worlds` menu list. Everything fits Cloudflare's free tier.
 
@@ -52,6 +75,6 @@ That serves the game and multiplayer at `https://planetcrafter.<your-subdomain>.
 
 ## Roadmap ideas
 
-- O₂ as a survival constraint (suit tank outside breathable zones)
 - Water/ice physics, weather as the atmosphere thickens
-- Chat, colony goals, per-biome plant species
+- More creatures (flyers once the air is thick, swimmers after the melt), synced herd movement
+- Colony goals, per-biome plant species
