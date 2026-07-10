@@ -88,7 +88,7 @@
 
   /* ---------- inventory & field guide panels ---------- */
   #space{position:fixed;inset:0;z-index:25;display:none;touch-action:none}
-  #inv,#help,#trade,#dest,#report{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;
+  #inv,#help,#trade,#dest,#report,#admin{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;
     display:none;flex-direction:column;width:min(92vw,560px);max-height:min(80vh,660px);
     background:var(--panel);border:1px solid var(--edge);border-radius:12px;overflow:hidden}
   #trade{border-color:rgba(255,158,100,.45)}
@@ -100,7 +100,12 @@
   .phead button{appearance:none;border:1px solid var(--edge);background:rgba(255,255,255,.06);
     color:var(--bone);border-radius:6px;font:600 11px var(--mono);padding:5px 10px;cursor:pointer}
   .phead button:hover{border-color:var(--gold)}
-  #invlist,#helplist,#tradelist,#destlist,#reportbody{overflow-y:auto;padding:8px 10px}
+  #invlist,#helplist,#tradelist,#destlist,#reportbody,#adminbody{overflow-y:auto;padding:8px 10px}
+  #adminbody input{flex:1;min-width:0;font:600 12px var(--mono);color:var(--bone);
+    background:rgba(255,255,255,.06);border:1px solid var(--edge);border-radius:6px;
+    padding:6px 8px;outline:none}
+  #adminbody .sect{font:700 12px var(--mono);color:var(--gold);text-transform:uppercase;
+    letter-spacing:.12em;padding:10px 8px 4px}
   #reportbody .hdesc{padding:6px 8px 10px}
   .hrow .golaunch{margin-left:auto;align-self:center;flex:none}
   .irow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px}
@@ -234,6 +239,12 @@
   </div>
   <div id="destlist"></div>
 </div>
+<div id="admin">
+  <div class="phead">Colony Settings
+    <span class="pbtns"><button id="adminclose">✕</button></span>
+  </div>
+  <div id="adminbody"></div>
+</div>
 <div id="report">
   <div class="phead"><span id="reporttitle">Landing Report</span>
     <span class="pbtns"><button id="reportok">🜲 fly home</button></span>
@@ -288,6 +299,7 @@
     <div id="btns">
       <button id="play">▶ Explore</button>
       <button id="menuhelp" class="ghost">📖 Field guide</button>
+      <button id="menuadmin" class="ghost">⚙ Settings</button>
       <button id="newworld" class="ghost">☄ New planet</button>
     </div>
     <p id="touchwarn">Touch controls on: joystick to move, drag to look, ⛏/▣ to mine and build.</p>
@@ -302,12 +314,15 @@
 const SKEY='planetcrafter-save-v1';
 let SEED=(Math.random()*2**31)|0, editsFlat={}, savedPlayer=null, saveDirty=false;
 let inv={}, creative=false, credits=0, savedHotbar=null;
+// world rules: founder-tunable in colonies (server-owned), save-persisted solo
+const RULES={growth:1,mining:1,drain:1,creative:'all'};
 try{
   const s=JSON.parse(localStorage.getItem(SKEY));
   if(s && typeof s.seed==='number'){
     SEED=s.seed; editsFlat=s.edits||{}; savedPlayer=s.player||null;
     inv=s.inv||{}; creative=!!s.creative; credits=s.credits|0;
     savedHotbar=s.hotbar||null; // applied after the block table exists
+    if(s.rules&&typeof s.rules==='object') Object.assign(RULES,s.rules);
   }
 }catch(e){}
 function playerState(){
@@ -321,7 +336,7 @@ function saveNow(){
         JSON.stringify({player:playerState(),inv,creative,credits,hotbar:HOTBAR}));
     else
       localStorage.setItem(SKEY,JSON.stringify({seed:SEED,edits:editsFlat,
-        player:playerState(),inv,creative,credits,hotbar:HOTBAR}));
+        player:playerState(),inv,creative,credits,hotbar:HOTBAR,rules:RULES}));
   }catch(e){}
   saveDirty=false;
 }
@@ -846,9 +861,9 @@ let locked=false,fallbackMode=false,nameTimer=0;
 // coarse pointer = tablet/phone: show touch controls (keyboard/mouse stay live in parallel)
 let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 let invOpen=false,helpOpen=false,tradeOpen=false,destOpen=false,reportOpen=false,
-  relock=false; // relock: pointer lock lent to a panel
+  adminOpen=false,relock=false; // relock: pointer lock lent to a panel
 const uiActive=()=>locked||fallbackMode;
-const panelOpen=()=>invOpen||helpOpen||tradeOpen||destOpen||reportOpen;
+const panelOpen=()=>invOpen||helpOpen||tradeOpen||destOpen||reportOpen||adminOpen;
 function setHUD(on){
   menu.style.display=on?'none':'flex';
   crossEl.style.display=on?'block':'none';
@@ -1011,7 +1026,7 @@ function updateMining(dt){
   MINE.t+=dt;
   MINE.snd-=dt;
   if(MINE.snd<=0){ MINE.snd=.17; sfx(70+hit.id*9); } // digging crunch
-  const need=HARD[hit.id]||.8;
+  const need=(HARD[hit.id]||.8)/RULES.mining;
   bar.style.display='block';
   fill.style.width=Math.min(100,MINE.t/need*100)+'%';
   if(MINE.t>=need){ breakBlock(hit); MINE.key=null; MINE.t=0; } // keep holding for the next
@@ -1081,12 +1096,16 @@ document.addEventListener('keydown',e=>{
   if(e.code==='KeyF') toggleFly();
   if(e.code==='KeyC') craft();
   if(e.code==='KeyG'){
-    creative=!creative; saveDirty=true; updateSlots();
-    toast(creative?'Creative mode — infinite blocks':'Survival mode — mine to build');
-    sfx(creative?400:300,creative?620:200,.09,'triangle');
-    if(MP.on){ // the colony gets told, and your beam turns magenta
-      const msg=creative?'✦ entered creative mode':'✦ back to survival';
-      mpSend({t:'chat',msg}); addChat(myName,msg);
+    if(!creative&&RULES.creative==='admin'&&MP.on&&!MP.admin){
+      toast('Creative is founder-only in this colony');
+    }else{
+      creative=!creative; saveDirty=true; updateSlots();
+      toast(creative?'Creative mode — infinite blocks':'Survival mode — mine to build');
+      sfx(creative?400:300,creative?620:200,.09,'triangle');
+      if(MP.on){ // the colony gets told, and your beam turns magenta
+        const msg=creative?'✦ entered creative mode':'✦ back to survival';
+        mpSend({t:'chat',msg}); addChat(myName,msg);
+      }
     }
   }
   if(e.code.startsWith('Digit')){ const d=e.code==='Digit0'?10:+e.code.slice(5); if(d>=1&&d<=HOTBAR.length) selectSlot(d-1); }
@@ -1181,24 +1200,27 @@ function renderHelp(){
   }
 }
 function closePanels(){ // hard hide, no pointer-lock juggling (used when HUD drops)
-  invOpen=helpOpen=tradeOpen=destOpen=reportOpen=false; relock=false;
+  invOpen=helpOpen=tradeOpen=destOpen=reportOpen=adminOpen=false; relock=false;
   invEl.style.display='none'; helpEl.style.display='none';
   tradeEl.style.display='none'; destEl.style.display='none'; reportEl.style.display='none';
+  adminEl.style.display='none';
   if(SP.docked){ SP.docked=false; spaceCv.style.display='none'; }
 }
-function showPanel(which){ // 'inv'|'help'|'trade'|'dest'|'report'|null — handles the lock handoff
+function showPanel(which){ // 'inv'|'help'|'trade'|'dest'|'report'|'admin'|null
   const wasOpen=panelOpen();
   invOpen=which==='inv'; helpOpen=which==='help'; tradeOpen=which==='trade';
-  destOpen=which==='dest'; reportOpen=which==='report';
+  destOpen=which==='dest'; reportOpen=which==='report'; adminOpen=which==='admin';
   invEl.style.display=invOpen?'flex':'none';
   helpEl.style.display=helpOpen?'flex':'none';
   tradeEl.style.display=tradeOpen?'flex':'none';
   destEl.style.display=destOpen?'flex':'none';
   reportEl.style.display=reportOpen?'flex':'none';
+  adminEl.style.display=adminOpen?'flex':'none';
   if(invOpen) renderInv();
   if(helpOpen) renderHelp();
   if(tradeOpen) renderTrade();
   if(destOpen) renderDest();
+  if(adminOpen) renderAdmin();
   if(!panelOpen()&&SP.docked){ SP.docked=false; spaceCv.style.display='none'; } // leave orbit
   if(panelOpen()&&locked){ relock=true; document.exitPointerLock(); }
   else if(!panelOpen()&&wasOpen&&relock){
@@ -1207,6 +1229,92 @@ function showPanel(which){ // 'inv'|'help'|'trade'|'dest'|'report'|null — hand
     catch(e){ startFallback(); }
   }
 }
+/* ---- colony settings: world rules for everyone, founder tools on top ---- */
+const adminEl=document.getElementById('admin');
+function applyRules(r){
+  if(!r) return;
+  RULES.growth=+r.growth||1; RULES.mining=+r.mining||1; RULES.drain=+r.drain||1;
+  RULES.creative=r.creative==='admin'?'admin':'all';
+  if(RULES.creative==='admin'&&MP.on&&!MP.admin&&creative){
+    creative=false; updateSlots();
+    toast('Creative is founder-only here — back to survival');
+  }
+}
+function updateAdminBtn(){ // colonists who aren't the founder don't get the wrench
+  document.getElementById('menuadmin').style.display=(MP.on&&!MP.admin)?'none':'';
+}
+function renderAdmin(){
+  const body=document.getElementById('adminbody');
+  body.textContent='';
+  const sect=t=>{ const h=document.createElement('div'); h.className='sect'; h.textContent=t; body.appendChild(h); };
+  const row=(label,opts,cur,set)=>{
+    const r=document.createElement('div'); r.className='irow';
+    const nm=document.createElement('span'); nm.className='iname'; nm.textContent=label;
+    r.appendChild(nm);
+    for(const [txt,val] of opts){
+      const b=document.createElement('button'); b.className='craftb';
+      b.textContent=txt; b.disabled=String(val)===String(cur);
+      b.addEventListener('click',()=>set(val));
+      r.appendChild(b);
+    }
+    body.appendChild(r);
+  };
+  const push=()=>{ // colonies: the server owns the rules; solo: the save does
+    if(MP.on) mpSend({t:'rules',growth:RULES.growth,mining:RULES.mining,
+      drain:RULES.drain,creative:RULES.creative});
+    else saveDirty=true;
+    renderAdmin();
+  };
+  sect(MP.on?'World rules — apply to every colonist':'World rules');
+  const speeds=[['½×',.5],['1×',1],['2×',2],['4×',4]];
+  row('Plant growth',speeds,RULES.growth,v=>{ RULES.growth=v; push(); });
+  row('Mining speed',speeds,RULES.mining,v=>{ RULES.mining=v; push(); });
+  row('Suit O₂ drain',[['½×',.5],['1×',1],['2×',2]],RULES.drain,v=>{ RULES.drain=v; push(); });
+  row('Creative mode',[['everyone','all'],['founder only','admin']],RULES.creative,
+    v=>{ RULES.creative=v; push(); });
+  if(MP.on&&MP.admin){
+    sect('Founder tools');
+    const pr=document.createElement('div'); pr.className='irow';
+    const pi=document.createElement('input'); pi.type='password';
+    pi.placeholder='new colony password'; pi.maxLength=64;
+    const ps=document.createElement('button'); ps.className='craftb'; ps.textContent='set';
+    ps.addEventListener('click',()=>{
+      const v=pi.value; if(!v) return;
+      mpSend({t:'admin',op:'pass',value:v});
+      try{ localStorage.setItem('pc-pass-'+WORLD,v); }catch(e){}
+      toast('Colony password updated'); pi.value='';
+    });
+    const pu=document.createElement('button'); pu.className='craftb'; pu.textContent='remove';
+    pu.addEventListener('click',()=>{
+      mpSend({t:'admin',op:'pass',value:''});
+      try{ localStorage.removeItem('pc-pass-'+WORLD); }catch(e){}
+      toast('Colony unlocked — anyone can join');
+    });
+    pr.appendChild(pi); pr.appendChild(ps); pr.appendChild(pu); body.appendChild(pr);
+    for(const [pid,p] of MP.players){
+      const r=document.createElement('div'); r.className='irow';
+      const nm=document.createElement('span'); nm.className='iname'; nm.textContent=p.name;
+      r.appendChild(nm);
+      const kb=document.createElement('button'); kb.className='craftb'; kb.textContent='kick';
+      kb.addEventListener('click',()=>{ mpSend({t:'admin',op:'kick',id:pid}); toast('Kicked '+p.name); });
+      r.appendChild(kb); body.appendChild(r);
+    }
+    if(!MP.players.size){
+      const d=document.createElement('div'); d.className='hdesc';
+      d.textContent='No other colonists online right now.'; body.appendChild(d);
+    }
+    const wr=document.createElement('div'); wr.className='irow';
+    const wb=document.createElement('button'); wb.className='craftb';
+    wb.textContent='☄ wipe world — erase every edit';
+    wb.addEventListener('click',()=>{
+      if(confirm('Erase ALL edits in “'+WORLD+'”? The planet regenerates bare from its seed. This cannot be undone.'))
+        mpSend({t:'admin',op:'wipe'});
+    });
+    wr.appendChild(wb); body.appendChild(wr);
+  }
+}
+document.getElementById('adminclose').addEventListener('click',()=>showPanel(null));
+document.getElementById('menuadmin').addEventListener('click',()=>showPanel('admin'));
 document.getElementById('invclose').addEventListener('click',()=>showPanel(null));
 document.getElementById('helpclose').addEventListener('click',()=>showPanel(null));
 document.getElementById('invhelp').addEventListener('click',()=>showPanel('help'));
@@ -1691,12 +1799,16 @@ function resetWorld(){ // the server's seed replaced ours: regenerate everything
 let mpAttempts=0;
 function connect(){
   if(location.protocol==='file:') return; // opened directly: single player
-  let ws,pass='';
-  try{ pass=localStorage.getItem('pc-pass-'+WORLD)||''; }catch(e){}
+  let ws,pass='',adm='';
+  try{
+    pass=localStorage.getItem('pc-pass-'+WORLD)||'';
+    adm=localStorage.getItem('pc-admin-'+WORLD)||'';
+  }catch(e){}
   try{
     ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+
       '/ws?world='+encodeURIComponent(WORLD)+'&name='+encodeURIComponent(myName)+
-      (pass?'&pass='+encodeURIComponent(pass):''));
+      (pass?'&pass='+encodeURIComponent(pass):'')+
+      (adm?'&admin='+encodeURIComponent(adm):''));
   }catch(e){ return; }
   ws.onmessage=e=>{
     let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
@@ -1707,6 +1819,13 @@ function connect(){
     }
     if(m.t==='join'){
       MP.on=true; MP.ws=ws; MP.id=m.you; mpAttempts=0;
+      MP.admin=!!m.isAdmin;
+      if(m.adminToken){ // founding this colony: keep the key, quietly
+        MP.admin=true;
+        try{ localStorage.setItem('pc-admin-'+WORLD,m.adminToken); }catch(err){}
+      }
+      applyRules(m.rules);
+      updateAdminBtn();
       SEED=m.seed;
       editsByChunk.clear();
       for(const k in m.edits){
@@ -1738,13 +1857,25 @@ function connect(){
       MP.players.delete(m.id); removeTag(m.id);
       if(p){ toast(p.name+' left'); addChat('',p.name+' left',true); }
       updateStatus();
+    }else if(m.t==='rules'){
+      applyRules(m.rules);
+      toast('Colony rules updated'); if(adminOpen) renderAdmin();
+    }else if(m.t==='kicked'){ MP.kicked=true; }
+    else if(m.t==='wiped'){
+      toast('The founder reset the planet — reloading…');
+      saveDirty=false; setTimeout(()=>location.reload(),1200);
     }
   };
   ws.onclose=()=>{
     const was=MP.on;
     MP.on=false; MP.ws=null;
     for(const id of [...MP.players.keys()]) removeTag(id);
-    MP.players.clear(); updateStatus();
+    MP.players.clear(); updateStatus(); updateAdminBtn();
+    if(MP.kicked){
+      MP.kicked=false; setHUD(false);
+      tagline.textContent='Removed from “'+WORLD+'” by the founder.';
+      return;
+    }
     if(MP.deny){ // locked colony: back to the menu to ask for the password
       MP.deny=false;
       setHUD(false);
@@ -2064,7 +2195,7 @@ setInterval(()=>{
     if(!g&&!sp) continue;
     const [x,y,z]=k.split(',').map(Number);
     if(!chunks.has((x>>4)+','+(z>>4))) continue; // only tick loaded ground
-    if(spreadOK&&sp&&Math.random()<sp){ // a seed drifts to a neighbouring column
+    if(spreadOK&&sp&&Math.random()<sp*RULES.growth){ // a seed drifts to a neighbouring column
       const tx=x+((Math.random()*3)|0)-1, tz=z+((Math.random()*3)|0)-1;
       if(tx!==x||tz!==z){
         let ty=y+1;
@@ -2081,7 +2212,7 @@ setInterval(()=>{
     const lightM=sunlit(x,y,z)?1:.5; // windowless caves grow at half speed
     let tm=pi.enc&&pi.heat?tempMul(pocketTempOf(pi.heat)):tempM;
     if(id===11) tm=Math.max(tm,.3); // lichen is the cold-tolerant pioneer species
-    if(Math.random()<g.p*tm*encM*lightM){
+    if(Math.random()<g.p*tm*encM*lightM*RULES.growth){
       if(g.next) setBlock(x,y,z,g.next); else growTree(x,y,z);
     }
   }
@@ -2148,11 +2279,11 @@ function updateSuit(dt){
   const pocketOK=STATS.sheltered&&STATS.pocket>=10;
   let rate;
   if(creative) rate=0;
-  else if(under) rate=-.9;                 // holding your breath
+  else if(under) rate=-.9*RULES.drain;     // holding your breath
   else if(atLander) rate=9;
   else if(pocketOK) rate=2.5;
   else if(breathable) rate=1;
-  else rate=-100/480;                      // ~8 minutes on a full tank
+  else rate=-(100/480)*RULES.drain;        // ~8 minutes on a full tank at 1×
   suitO2=Math.max(0,Math.min(100,suitO2+rate*dt));
   if(suitO2<25&&suitWarn<1&&rate<0){ suitWarn=1; toast('Suit O₂ below 25% — get to air'); }
   if(suitO2<TIRED&&suitWarn<2&&rate<0){ suitWarn=2; toast('Exhausted — too tired to build'); }

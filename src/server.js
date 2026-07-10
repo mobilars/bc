@@ -32,6 +32,7 @@ export class World {
     const name = (url.searchParams.get('name') || 'colonist').slice(0, 20);
     const worldName = (url.searchParams.get('world') || 'outpost-1').slice(0, 32);
     const pass = (url.searchParams.get('pass') || '').slice(0, 64);
+    const adm = (url.searchParams.get('admin') || '').slice(0, 64);
     await this.ctx.storage.put('worldName', worldName);
 
     let seed = await this.ctx.storage.get('seed');
@@ -52,10 +53,24 @@ export class World {
       }
     }
 
+    // Founder identity: minted at creation (or claimed by the first joiner of a
+    // legacy world). Only its SHA-256 lives here; the token stays client-side.
+    let adminToken = null, isAdmin = false;
+    let adminHash = await this.ctx.storage.get('admin');
+    if (adminHash === undefined) {
+      adminToken = crypto.randomUUID();
+      adminHash = await sha256(adminToken);
+      await this.ctx.storage.put('admin', adminHash);
+      isAdmin = true;
+    } else if (adm && (await sha256(adm)) === adminHash) isAdmin = true;
+
+    const rules = (await this.ctx.storage.get('rules')) ||
+      { growth: 1, mining: 1, drain: 1, creative: 'all' };
+
     const pair = new WebSocketPair();
     const id = crypto.randomUUID().slice(0, 8);
     this.ctx.acceptWebSocket(pair[1]);
-    pair[1].serializeAttachment({ id, name });
+    pair[1].serializeAttachment({ id, name, adm: isAdmin ? 1 : 0 });
 
     const edits = {};
     const stored = await this.ctx.storage.list({ prefix: 'e:' });
@@ -66,7 +81,8 @@ export class World {
       .filter(w => w !== pair[1])
       .map(w => { const a = w.deserializeAttachment(); return { id: a.id, name: a.name }; });
 
-    pair[1].send(JSON.stringify({ t: 'join', you: id, seed, edits, players }));
+    pair[1].send(JSON.stringify({ t: 'join', you: id, seed, edits, players, rules,
+      isAdmin, adminToken }));
     this.broadcast(pair[1], { t: 'joined', id, name });
     this.report(true);
     return new Response(null, { status: 101, webSocket: pair[0] });
@@ -90,6 +106,39 @@ export class World {
       if (now - (this.chatAt.get(a.id) || 0) < 400) return; // rate limit
       this.chatAt.set(a.id, now);
       this.broadcast(ws, { t: 'chat', id: a.id, name: a.name, msg });
+    } else if (m.t === 'rules' && a.adm) {
+      // founder retunes the colony: clamp, store, tell everyone (sender included)
+      const clamp = v => Math.max(.25, Math.min(8, +v || 1));
+      const rules = {
+        growth: clamp(m.growth), mining: clamp(m.mining), drain: clamp(m.drain),
+        creative: m.creative === 'admin' ? 'admin' : 'all',
+      };
+      await this.ctx.storage.put('rules', rules);
+      this.broadcast(null, { t: 'rules', rules });
+    } else if (m.t === 'admin' && a.adm) {
+      if (m.op === 'pass' && typeof m.value === 'string') {
+        const v = m.value.slice(0, 64);
+        if (v) await this.ctx.storage.put('pass', await sha256(v));
+        else await this.ctx.storage.delete('pass');
+        this.report(true);
+      } else if (m.op === 'kick' && typeof m.id === 'string') {
+        for (const w of this.ctx.getWebSockets()) {
+          const wa = w.deserializeAttachment();
+          if (wa && wa.id === m.id && !wa.adm) {
+            try { w.send(JSON.stringify({ t: 'kicked' })); w.close(4000, 'kicked'); } catch (e) {}
+          }
+        }
+      } else if (m.op === 'wipe') {
+        // erase the edit history: the world regenerates bare from its seed
+        let keys;
+        do {
+          keys = [...(await this.ctx.storage.list({ prefix: 'e:', limit: 128 })).keys()];
+          if (keys.length) await this.ctx.storage.delete(keys);
+        } while (keys.length);
+        this.editCount = 0;
+        this.broadcast(null, { t: 'wiped' });
+        this.report(true);
+      }
     } else if (m.t === 'set'
         && [m.x, m.y, m.z, m.id].every(Number.isInteger)
         // max id must track the block table (INFO) in public/index.html
