@@ -1,14 +1,18 @@
 {
-  "name": "blockcraft",
+  "name": "planetcrafter",
   "main": "src/server.js",
   "compatibility_date": "2026-07-10",
   "assets": {
     "directory": "./public"
   },
   "durable_objects": {
-    "bindings": [{ "name": "WORLD", "class_name": "World" }]
+    "bindings": [
+      { "name": "WORLD", "class_name": "World" },
+      { "name": "LOBBY", "class_name": "Lobby" }
+    ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["World"] }
+    { "tag": "v1", "new_sqlite_classes": ["World"] },
+    { "tag": "v2", "new_sqlite_classes": ["Lobby"] }
   ]
 }

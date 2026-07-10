@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BlockCraft — voxel sandbox</title>
+<title>PlanetCrafter — terraform a dead world</title>
 <style>
   :root{
-    --ink:#141b16; --panel:rgba(20,27,22,.92); --edge:rgba(255,255,255,.14);
-    --gold:#ffd166; --gold-deep:#7a5b16; --bone:#f2efe4; --sage:#9ab3a6;
+    --ink:#120d14; --panel:rgba(23,15,25,.93); --edge:rgba(255,255,255,.13);
+    --gold:#ff9e64; --gold-deep:#7c3018; --bone:#f2ece4; --sage:#a89bb0;
     --mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,monospace;
   }
-  html,body{height:100%;margin:0;overflow:hidden;background:#8cbef2;
+  html,body{height:100%;margin:0;overflow:hidden;background:#241318;
     font-family:system-ui,'Segoe UI',sans-serif;color:var(--bone)}
   #gl{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
 
@@ -51,7 +51,24 @@
     background:rgba(14,19,15,.55);padding:6px 10px;border-radius:6px;display:none;
     pointer-events:none;white-space:pre;font-variant-numeric:tabular-nums}
 
-  #tint{position:fixed;inset:0;background:rgba(24,66,148,.38);display:none;pointer-events:none}
+  #tint{position:fixed;inset:0;background:rgba(14,74,84,.4);display:none;pointer-events:none}
+
+  #terra{position:fixed;top:10px;right:10px;display:none;flex-direction:column;gap:2px;
+    font:11px/1.6 var(--mono);color:var(--bone);background:rgba(20,12,22,.62);
+    padding:8px 12px;border-radius:6px;pointer-events:none;text-align:right;
+    font-variant-numeric:tabular-nums}
+  #terra b{color:var(--gold);font-weight:700}
+  #terra .stg{color:var(--gold);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+  #terra .goal{color:var(--sage)}
+
+  #worlds{display:none;flex-direction:column;gap:6px;margin-top:18px}
+  #worlds h3{margin:0 0 2px;font:600 11px var(--mono);color:var(--sage);
+    text-transform:uppercase;letter-spacing:.08em}
+  .wrow{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    font:600 13px var(--mono);color:var(--bone);background:rgba(255,255,255,.05);
+    border:1px solid var(--edge);border-radius:6px;padding:8px 12px;cursor:pointer;text-align:left}
+  .wrow:hover{border-color:var(--gold)}
+  .wrow .meta{color:var(--sage);font-weight:400;font-size:11px}
 
   /* ---------- Menu ---------- */
   #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
@@ -94,11 +111,12 @@
 <div id="hotbar"></div>
 <div id="tags"></div>
 <div id="debug"></div>
+<div id="terra"></div>
 
 <div id="menu">
   <div id="panel">
-    <h1>Blockcraft</h1>
-    <p id="tagline">An endless voxel world in your browser. Dig, build, wander.</p>
+    <h1>Planetcrafter</h1>
+    <p id="tagline">Crash-landed on a dead red rock. Plant, warm, breathe — make it home.</p>
     <div class="rule"></div>
     <div id="controls">
       <kbd>W A S D</kbd><span>move</span>
@@ -114,11 +132,12 @@
     </div>
     <div id="mpbar">
       <label>Name <input id="pname" maxlength="16" autocomplete="off"></label>
-      <label>World <input id="pworld" maxlength="32" autocomplete="off" spellcheck="false"></label>
+      <label>Colony <input id="pworld" maxlength="32" autocomplete="off" spellcheck="false"></label>
     </div>
+    <div id="worlds"></div>
     <div id="btns">
-      <button id="play">▶ Play</button>
-      <button id="newworld" class="ghost">New world</button>
+      <button id="play">▶ Explore</button>
+      <button id="newworld" class="ghost">☄ New planet</button>
     </div>
     <p id="touchwarn">This game needs a mouse and keyboard — touch isn't supported.</p>
     <p id="err"></p>
@@ -129,7 +148,7 @@
 <script>
 'use strict';
 /* ================= persistence ================= */
-const SKEY='blockcraft-save-v1';
+const SKEY='planetcrafter-save-v1';
 let SEED=(Math.random()*2**31)|0, editsFlat={}, savedPlayer=null, saveDirty=false;
 let inv={}, creative=false;
 try{
@@ -146,7 +165,7 @@ function saveNow(){
   try{
     if(typeof MP!=='undefined'&&MP.on)
       // in multiplayer the server owns the world; only remember our own state per world
-      localStorage.setItem('blockcraft-pos-'+WORLD,
+      localStorage.setItem('pc-pos-'+WORLD,
         JSON.stringify({player:playerState(),inv,creative}));
     else
       localStorage.setItem(SKEY,JSON.stringify({seed:SEED,edits:editsFlat,
@@ -183,25 +202,33 @@ function heightAt(x,z){
 }
 
 /* ================= blocks & texture atlas ================= */
-// ids: 1 grass 2 dirt 3 stone 4 log 5 leaves 6 sand 7 planks 8 cobble 9 glass 10 water
+// ids: 1 regolith 2 rock 3 basalt 4 ice 5 alien trunk 6 canopy 7 timber
+//      8 cut rock 9 glass 10 water 11 lichen 12 moss 13 shrub 14 heater 15 verdant regolith
 const WATER=10, GLASS=9;
 const INFO={
-  1:{n:'Grass', t:0, s:1, b:2, icon:0},
-  2:{n:'Dirt',  t:2, s:2, b:2, icon:2},
-  3:{n:'Stone', t:3, s:3, b:3, icon:3},
-  4:{n:'Log',   t:5, s:4, b:5, icon:4},
-  5:{n:'Leaves',t:6, s:6, b:6, icon:6},
-  6:{n:'Sand',  t:7, s:7, b:7, icon:7},
-  7:{n:'Planks',t:8, s:8, b:8, icon:8},
-  8:{n:'Cobblestone',t:9,s:9,b:9,icon:9},
-  9:{n:'Glass', t:10,s:10,b:10,icon:10},
-  10:{n:'Water',t:11,s:11,b:11,icon:11},
+  1:{n:'Regolith',t:0, s:1, b:1, icon:0},
+  2:{n:'Rock',    t:2, s:2, b:2, icon:2},
+  3:{n:'Basalt',  t:3, s:3, b:3, icon:3},
+  4:{n:'Ice',     t:4, s:4, b:4, icon:4},
+  5:{n:'Alien Trunk',t:5,s:5,b:5,icon:5},
+  6:{n:'Canopy',  t:6, s:6, b:6, icon:6},
+  7:{n:'Timber',  t:7, s:7, b:7, icon:7},
+  8:{n:'Cut Rock',t:8, s:8, b:8, icon:8},
+  9:{n:'Glass',   t:9, s:9, b:9, icon:9},
+  10:{n:'Water',  t:10,s:10,b:10,icon:10},
+  11:{n:'Lichen', t:11,s:11,b:11,icon:11},
+  12:{n:'Moss',   t:12,s:12,b:12,icon:12},
+  13:{n:'Shrub',  t:13,s:13,b:13,icon:13},
+  14:{n:'Heater', t:14,s:14,b:14,icon:14},
+  15:{n:'Verdant Regolith',t:15,s:1,b:1,icon:15},
 };
 const isOpaque=id=>id!==0&&id!==GLASS&&id!==WATER;
 const isSolid=id=>id!==0&&id!==WATER;
-const HOTBAR=[1,2,3,8,7,4,5,6,9];
+const HOTBAR=[1,2,8,7,9,4,11,14,3];
+// what mining a block yields (0 = nothing; plants regress to lichen)
+const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14};
 
-const atlas=document.createElement('canvas'); atlas.width=256; atlas.height=16;
+const atlas=document.createElement('canvas'); atlas.width=512; atlas.height=16;
 const ac=atlas.getContext('2d');
 const cl=v=>Math.max(0,Math.min(255,v|0));
 function tileNoise(i,base,vary,alpha){
@@ -215,42 +242,50 @@ function tileNoise(i,base,vary,alpha){
 }
 function px(i,x,y,c){ ac.fillStyle=c; ac.fillRect(i*16+x,y,1,1); }
 function buildAtlas(){
-  tileNoise(0,[104,168,62],30);                       // grass top
-  tileNoise(1,[134,96,67],26);                        // grass side
-  for(let x=0;x<16;x++){ const d=2+(Math.random()<.5?0:1);
-    for(let y=0;y<d;y++) px(1,x,y,`rgb(${cl(96+Math.random()*24)},${cl(150+Math.random()*30)},50)`); }
-  tileNoise(2,[134,96,67],26);                        // dirt
-  tileNoise(3,[126,126,126],22);                      // stone
-  tileNoise(4,[104,82,50],14);                        // log side
+  const rnd16=()=>(Math.random()*16)|0;
+  tileNoise(0,[170,92,54],26);                        // regolith top (rust dust)
+  tileNoise(1,[138,72,46],22);                        // regolith side
+  tileNoise(2,[128,112,100],20);                      // rock
+  tileNoise(3,[60,56,64],16);                         // basalt
+  tileNoise(4,[190,216,230],16);                      // ice
+  for(let k=0;k<10;k++) px(4,rnd16(),rnd16(),'rgb(150,182,206)');
+  for(let k=0;k<6;k++) px(4,rnd16(),rnd16(),'rgb(236,248,254)');
+  tileNoise(5,[96,68,88],14);                         // alien trunk
   for(let x=0;x<16;x+=4) for(let y=0;y<16;y++)
-    if(Math.random()<.85) px(4,x,y,'rgb(78,60,36)');
-  tileNoise(5,[104,82,50],10);                        // log top
-  ac.fillStyle='rgb(176,148,98)'; ac.fillRect(5*16+3,3,10,10);
-  ac.fillStyle='rgb(140,112,66)'; ac.fillRect(5*16+5,5,6,6);
-  ac.fillStyle='rgb(176,148,98)'; ac.fillRect(5*16+7,7,2,2);
-  tileNoise(6,[56,122,42],36);                        // leaves
-  for(let k=0;k<46;k++) px(6,(Math.random()*16)|0,(Math.random()*16)|0,'rgb(34,86,26)');
-  tileNoise(7,[219,206,160],20);                      // sand
-  tileNoise(8,[158,126,74],12);                       // planks
-  for(let y=3;y<16;y+=4) for(let x=0;x<16;x++) px(8,x,y,'rgb(102,78,44)');
-  for(let b=0;b<4;b++) px(8,(b*5+(b%2?2:8))%16,b*4+1,'rgb(96,74,42)');
-  tileNoise(9,[112,112,114],26);                      // cobble
+    if(Math.random()<.85) px(5,x,y,'rgb(68,46,64)');
+  tileNoise(6,[64,152,124],30);                       // canopy (teal, magenta blooms)
+  for(let k=0;k<12;k++) px(6,rnd16(),rnd16(),'rgb(186,110,172)');
+  for(let k=0;k<20;k++) px(6,rnd16(),rnd16(),'rgb(40,104,86)');
+  tileNoise(7,[152,130,152],12);                      // timber
+  for(let y=3;y<16;y+=4) for(let x=0;x<16;x++) px(7,x,y,'rgb(104,86,108)');
+  tileNoise(8,[118,106,112],18);                      // cut rock
   for(let gx=0;gx<16;gx++) for(let gy=0;gy<16;gy++)
-    if((gx%5===0||gy%5===0)&&Math.random()<.75) px(9,gx,gy,'rgb(74,74,78)');
-  ac.clearRect(10*16,0,16,16);                        // glass
+    if((gx%5===0||gy%5===0)&&Math.random()<.7) px(8,gx,gy,'rgb(78,68,76)');
+  ac.clearRect(9*16,0,16,16);                         // glass
   ac.fillStyle='rgba(214,236,244,255)';
-  ac.fillRect(10*16,0,16,1); ac.fillRect(10*16,15,16,1);
-  ac.fillRect(10*16,0,1,16); ac.fillRect(10*16+15,0,1,16);
-  for(let k=0;k<6;k++) px(10,3+k,10-k,'rgb(226,244,250)');
-  px(10,4,4,'rgba(226,244,250,.9)'); px(10,11,12,'rgba(226,244,250,.9)');
-  tileNoise(11,[46,94,182],28);                       // water
-  for(let k=0;k<24;k++) px(11,(Math.random()*16)|0,(Math.random()*16)|0,'rgb(88,140,224)');
-  tileNoise(12,[226,185,144],14);                     // player head
-  for(const ex of [4,5,10,11]) px(12,ex,6,'rgb(58,42,32)');
-  px(12,7,10,'rgb(152,92,72)'); px(12,8,10,'rgb(152,92,72)');
-  tileNoise(13,[186,72,64],18);                       // shirts
-  tileNoise(14,[74,104,186],18);
-  tileNoise(15,[84,150,96],18);
+  ac.fillRect(9*16,0,16,1); ac.fillRect(9*16,15,16,1);
+  ac.fillRect(9*16,0,1,16); ac.fillRect(9*16+15,0,1,16);
+  for(let k=0;k<6;k++) px(9,3+k,10-k,'rgb(226,244,250)');
+  px(9,4,4,'rgba(226,244,250,.9)'); px(9,11,12,'rgba(226,244,250,.9)');
+  tileNoise(10,[28,96,104],24);                       // water (alien teal)
+  for(let k=0;k<20;k++) px(10,rnd16(),rnd16(),'rgb(70,152,160)');
+  tileNoise(11,[152,84,54],22);                       // lichen: rust with pale growth
+  for(let k=0;k<34;k++) px(11,rnd16(),rnd16(),'rgb(142,182,110)');
+  tileNoise(12,[96,132,66],24);                       // moss
+  for(let k=0;k<16;k++) px(12,rnd16(),rnd16(),'rgb(58,94,44)');
+  tileNoise(13,[74,128,70],26);                       // shrub
+  for(let x=2;x<16;x+=5) for(let y=6;y<16;y++) px(13,x,y,'rgb(50,84,48)');
+  tileNoise(14,[70,66,76],12);                        // heater: dark shell, hot core
+  ac.fillStyle='rgb(255,138,58)'; ac.fillRect(14*16+4,4,8,8);
+  ac.fillStyle='rgb(255,222,150)'; ac.fillRect(14*16+6,6,4,4);
+  for(const [bx,by] of [[1,1],[14,1],[1,14],[14,14]]) px(14,bx,by,'rgb(150,150,160)');
+  tileNoise(15,[94,152,72],26);                       // verdant regolith top
+  for(let k=0;k<16;k++) px(15,rnd16(),rnd16(),'rgb(152,98,60)');
+  tileNoise(16,[222,226,232],10);                     // suit helmet
+  ac.fillStyle='rgb(38,50,68)'; ac.fillRect(16*16+3,5,10,5);
+  tileNoise(17,[196,90,70],14);                       // suit colors
+  tileNoise(18,[86,120,196],14);
+  tileNoise(19,[198,162,86],14);
 }
 buildAtlas();
 
@@ -360,6 +395,9 @@ function applyBlock(x,y,z,id){ // write a block into the live world (local or re
   const cx=x>>4,cz=z>>4,lx=x&15,lz=z&15,idx=(y<<8)|(lz<<4)|lx;
   if(!editsByChunk.has(cx+','+cz)) editsByChunk.set(cx+','+cz,new Map());
   editsByChunk.get(cx+','+cz).set(idx,id); // survives chunk unload/regen
+  const tk=x+','+y+','+z;
+  if(TERRA_SET.has(id)) terraMap.set(tk,id); else terraMap.delete(tk);
+  encCache.clear(); // sealed spaces may have opened or closed
   const ch=chunks.get(cx+','+cz);
   if(!ch) return;
   ch.data[idx]=id;
@@ -372,25 +410,41 @@ function setBlock(x,y,z,id){ // a deliberate player edit: sync to server, or per
   if(MP.on) mpSend({t:'set',x,y,z,id});
   else{ editsFlat[x+','+y+','+z]=id; saveDirty=true; }
 }
+function hash3(x,y,z){
+  let h=(Math.imul(x|0,374761393)+Math.imul(y|0,268435459)+Math.imul(z|0,668265263)+Math.imul(SEED,974711))|0;
+  h=(h^(h>>>13))>>>0; h=Math.imul(h,1274126177)>>>0;
+  return ((h^(h>>>16))>>>0)/4294967296;
+}
+function noise3(x,y,z){
+  const xi=Math.floor(x),yi=Math.floor(y),zi=Math.floor(z);
+  const fx=x-xi,fy=y-yi,fz=z-zi;
+  const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy),sz=fz*fz*(3-2*fz);
+  const n=(a,b,c)=>hash3(xi+a,yi+b,zi+c);
+  const c00=n(0,0,0)+(n(1,0,0)-n(0,0,0))*sx, c10=n(0,1,0)+(n(1,1,0)-n(0,1,0))*sx;
+  const c01=n(0,0,1)+(n(1,0,1)-n(0,0,1))*sx, c11=n(0,1,1)+(n(1,1,1)-n(0,1,1))*sx;
+  const c0=c00+(c10-c00)*sy, c1=c01+(c11-c01)*sy;
+  return c0+(c1-c0)*sz;
+}
 function genChunk(cx,cz){
   const data=new Uint8Array(16*16*CY);
   const put=(lx,y,lz,id)=>{ if(y>=0&&y<CY) data[(y<<8)|(lz<<4)|lx]=id; };
+  const melted=STATS.melted, verdant=STATS.verdant;
   for(let lx=0;lx<16;lx++) for(let lz=0;lz<16;lz++){
-    const wx=cx*16+lx, wz=cz*16+lz, h=heightAt(wx,wz), sandy=h<=SEA+1;
-    for(let y=0;y<=h;y++)
-      put(lx,y,lz, y===0?3 : y<h-2?3 : (sandy?6:(y<h?2:1)));
-    for(let y=h+1;y<=SEA;y++) put(lx,y,lz,WATER);
-    // trees (kept 2 blocks from chunk edge so they never cross the border)
-    if(lx>1&&lx<14&&lz>1&&lz<14&&h>SEA+1&&hash2(wx*13+71,wz*17+37)<0.016){
-      const th=4+((hash2(wx+911,wz-577)*3)|0);
-      for(let dy=th-1;dy<=th;dy++) for(let ox=-2;ox<=2;ox++) for(let oz=-2;oz<=2;oz++){
-        if(Math.abs(ox)===2&&Math.abs(oz)===2&&hash2(wx+ox*3,wz+oz*3+dy)<.5) continue;
-        if(!data[((h+dy)<<8)|((lz+oz)<<4)|(lx+ox)]) put(lx+ox,h+dy,lz+oz,5);
-      }
-      for(let ox=-1;ox<=1;ox++) for(let oz=-1;oz<=1;oz++)
-        if(Math.abs(ox)+Math.abs(oz)<2&&!data[((h+th+1)<<8)|((lz+oz)<<4)|(lx+ox)])
-          put(lx+ox,h+th+1,lz+oz,5);
-      for(let y=h+1;y<=h+th;y++) put(lx,y,lz,4);
+    const wx=cx*16+lx, wz=cz*16+lz, h=heightAt(wx,wz), lake=h<=SEA+1;
+    let topCarved=false;
+    for(let y=0;y<=h;y++){
+      // caves (never under lakes; bedrock layer stays)
+      if(y>2&&h>SEA+2&&noise3(wx*.09,y*.11,wz*.09)>.76){ if(y===h) topCarved=true; continue; }
+      let id = y===0?3 : y<h-6?3 : y<h-1?2 : 1;
+      if(y===h&&!lake&&verdant&&hash2(wx*5+1,wz*5+9)<.6) id=15;
+      if(y>2&&y<h-3&&hash3(wx,y*3,wz)<.012) id=4; // buried ice veins
+      put(lx,y,lz,id);
+    }
+    for(let y=h+1;y<=SEA;y++) put(lx,y,lz, melted?WATER:4); // frozen or liquid lakes
+    if(!lake&&!topCarved){
+      const r=hash2(wx*13+71,wz*17+37);
+      if(r<.01) put(lx,h+1,lz,4);        // surface ice deposit
+      else if(r<.018) put(lx,h+1,lz,2);  // boulder
     }
   }
   const em=editsByChunk.get(cx+','+cz);
@@ -434,7 +488,7 @@ function buildMesh(ch){
       const tile=F.t==='t'?info.t:F.t==='b'?info.b:info.s;
       const v=id===WATER?wv:sv, ix=id===WATER?wi:si, base=v.length/6;
       for(const c of F.c)
-        v.push(wx+c[0],y+c[1],wz+c[2],(tile+.02+c[3]*.96)/16,.02+c[4]*.96,F.sh);
+        v.push(wx+c[0],y+c[1],wz+c[2],(tile+.02+c[3]*.96)/32,.02+c[4]*.96,F.sh);
       ix.push(base,base+1,base+2,base,base+2,base+3);
     }
   }
@@ -556,11 +610,13 @@ function setHUD(on){
   crossEl.style.display=on?'block':'none';
   hotbarEl.style.display=on?'flex':'none';
   debugEl.style.display=on?'block':'none';
+  document.getElementById('terra').style.display=on?'flex':'none';
   cv.style.cursor=on&&fallbackMode?'none':'';
+  if(!on&&typeof fetchWorlds==='function') fetchWorlds();
 }
 function pause(){
   fallbackMode=false; setHUD(false);
-  tagline.textContent='Paused — your world is saved. Click Play to continue.';
+  tagline.textContent='Paused — your colony is saved. Click Explore to continue.';
   saveNow();
 }
 // pointer lock is blocked in some embedded contexts; play without capturing the mouse
@@ -585,13 +641,22 @@ function toast(msg){
   clearTimeout(nameTimer); nameTimer=setTimeout(()=>itemname.style.opacity=0,1800);
 }
 // blocks that don't occur naturally are crafted from ones that do
-const CRAFT={ 7:{from:4,n:4}, 9:{from:6,n:1}, 8:{from:3,n:1} };
+const CRAFT={
+  11:{cost:[[4,1],[1,1]],n:2},  // lichen: cultured from ice + regolith
+  14:{cost:[[2,2],[3,1]],n:1},  // heater: rock shell around a basalt core
+  9:{cost:[[1,2]],n:1},         // glass: fused regolith silica
+  8:{cost:[[2,1]],n:1},
+  7:{cost:[[5,1]],n:4},         // timber: milled alien trunk
+};
+const costText=r=>r.cost.map(c=>c[1]+' '+INFO[c[0]].n.toLowerCase()).join(' + ');
 function craft(){
   const id=HOTBAR[P.sel], r=CRAFT[id];
   if(creative) return toast('Creative mode — everything is free');
   if(!r) return toast(INFO[id].n+' is mined, not crafted');
-  if(!(inv[r.from]>0)) return toast('Need 1 '+INFO[r.from].n.toLowerCase()+' to craft '+INFO[id].n.toLowerCase());
-  inv[r.from]--; inv[id]=(inv[id]||0)+r.n; saveDirty=true; updateSlots();
+  for(const [cid,q] of r.cost)
+    if(!((inv[cid]||0)>=q)) return toast(INFO[id].n+' needs '+costText(r));
+  for(const [cid,q] of r.cost) inv[cid]-=q;
+  inv[id]=(inv[id]||0)+r.n; saveDirty=true; updateSlots();
   toast('Crafted '+r.n+' '+INFO[id].n.toLowerCase());
   sfx(520,760,.08,'triangle');
 }
@@ -599,7 +664,7 @@ function selectSlot(i){
   P.sel=(i+HOTBAR.length)%HOTBAR.length;
   [...hotbarEl.children].forEach((s,k)=>s.classList.toggle('sel',k===P.sel));
   const id=HOTBAR[P.sel];
-  toast(INFO[id].n+(CRAFT[id]&&!creative?'  ·  C crafts from '+INFO[CRAFT[id].from].n.toLowerCase():''));
+  toast(INFO[id].n+(CRAFT[id]&&!creative?'  ·  C: '+costText(CRAFT[id]):''));
   saveDirty=true;
 }
 selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
@@ -608,9 +673,9 @@ document.getElementById('play').addEventListener('click',()=>{
   const nv=pnameEl.value.trim().slice(0,16);
   if(nv&&nv!==myName){
     myName=nv;
-    try{ localStorage.setItem('blockcraft-name',myName); }catch(e){}
+    try{ localStorage.setItem('pc-name',myName); }catch(e){}
   }
-  const wv=(pworldEl.value.trim()||'overworld').slice(0,32);
+  const wv=(pworldEl.value.trim()||'outpost-1').slice(0,32);
   if(wv!==WORLD&&location.protocol!=='file:'){
     saveNow();
     location.search='?world='+encodeURIComponent(wv);
@@ -624,7 +689,7 @@ document.getElementById('play').addEventListener('click',()=>{
 });
 document.addEventListener('pointerlockerror',startFallback);
 document.getElementById('newworld').addEventListener('click',()=>{
-  if(!confirm('Start a fresh world? Your current world and builds will be erased.')) return;
+  if(!confirm('Start on a fresh planet? Your current single-player world will be erased.')) return;
   try{ localStorage.removeItem(SKEY); }catch(e){}
   location.reload();
 });
@@ -632,7 +697,7 @@ document.addEventListener('pointerlockchange',()=>{
   locked=document.pointerLockElement===cv;
   if(locked) fallbackMode=false;
   setHUD(locked);
-  if(!uiActive()){ tagline.textContent='Paused — your world is saved. Click Play to continue.'; saveNow(); }
+  if(!uiActive()){ tagline.textContent='Paused — your colony is saved. Click Explore to continue.'; saveNow(); }
 });
 document.addEventListener('mousemove',e=>{
   if(!uiActive()) return;
@@ -645,7 +710,10 @@ document.addEventListener('mousedown',e=>{
   if(e.button===0&&hit){
     if(hit.y<=0) return; // bedrock floor
     setBlock(hit.x,hit.y,hit.z,0);
-    if(!creative){ inv[hit.id]=(inv[hit.id]||0)+1; saveDirty=true; updateSlots(); }
+    if(!creative){
+      const d=DROP[hit.id];
+      if(d){ inv[d]=(inv[d]||0)+1; saveDirty=true; updateSlots(); }
+    }
     sfx(150,55,.1,'square');
   }else if(e.button===2&&hit&&hit.prev){
     const [px_,py_,pz_]=hit.prev;
@@ -684,9 +752,9 @@ document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.addEventListener('wheel',e=>{ if(uiActive()) selectSlot(P.sel+(e.deltaY>0?1:-1)); });
 
 /* ================= multiplayer ================= */
-const WORLD=(new URLSearchParams(location.search).get('world')||'overworld').slice(0,32)||'overworld';
-let myName='Miner'+((Math.random()*900+100)|0);
-try{ myName=localStorage.getItem('blockcraft-name')||myName; }catch(e){}
+const WORLD=(new URLSearchParams(location.search).get('world')||'outpost-1').slice(0,32)||'outpost-1';
+let myName='Colonist'+((Math.random()*900+100)|0);
+try{ myName=localStorage.getItem('pc-name')||myName; }catch(e){}
 const pnameEl=document.getElementById('pname'),pworldEl=document.getElementById('pworld');
 const statusEl=document.getElementById('seedlbl'),tagsEl=document.getElementById('tags');
 pnameEl.value=myName; pworldEl.value=WORLD;
@@ -705,7 +773,7 @@ function resetWorld(){ // the server's seed replaced ours: regenerate everything
   for(const ch of chunks.values()){ freeMesh(ch.solid); freeMesh(ch.water); }
   chunks.clear(); dirty.clear();
   let s=null;
-  try{ s=JSON.parse(localStorage.getItem('blockcraft-pos-'+WORLD)); }catch(e){}
+  try{ s=JSON.parse(localStorage.getItem('pc-pos-'+WORLD)); }catch(e){}
   if(s&&s.player&&typeof s.player.x==='number'){
     Object.assign(P,s.player); inv=s.inv||{}; creative=!!s.creative;
   }else{
@@ -736,6 +804,7 @@ function connect(){
       }
       MP.players.clear();
       for(const p of m.players) MP.players.set(p.id,newRemote(p.name));
+      rebuildTerra(); // stats must be right before terrain regenerates
       resetWorld();
       document.getElementById('newworld').style.display='none';
       toast('Joined “'+WORLD+'” as '+myName);
@@ -780,7 +849,7 @@ function pushBox(v,ii,cx,cy,cz,hx,h,hz,yaw,tile){
     for(const q of F.c){
       const ox=(q[0]*2-1)*hx, oy=q[1]*h, oz=(q[2]*2-1)*hz;
       v.push(cx+ox*c-oz*s, cy+oy, cz+ox*s+oz*c,
-        (tile+.02+q[3]*.96)/16, .02+q[4]*.96, F.sh);
+        (tile+.02+q[3]*.96)/32, .02+q[4]*.96, F.sh);
     }
     ii.push(base,base+1,base+2,base,base+2,base+3);
   }
@@ -791,8 +860,8 @@ function drawPlayers(){ // runs inside the solid pass: progW, texture and unifor
   const v=[],ii=[];
   for(const p of MP.players.values()){
     if(p.ty<-900) continue;
-    pushBox(v,ii,p.x,p.y,p.z,.24,1.15,.15,p.yaw,13+strHash(p.name)%3);
-    pushBox(v,ii,p.x,p.y+1.15,p.z,.22,.45,.22,p.yaw,12);
+    pushBox(v,ii,p.x,p.y,p.z,.24,1.15,.15,p.yaw,17+strHash(p.name)%3);
+    pushBox(v,ii,p.x,p.y+1.15,p.z,.22,.45,.22,p.yaw,16);
   }
   if(!ii.length) return;
   gl.bindBuffer(gl.ARRAY_BUFFER,pVbo);
@@ -828,6 +897,168 @@ function updateTags(){
     el.style.top=((-sy*.5+.5)*100)+'vh';
   }
 }
+const worldsEl=document.getElementById('worlds');
+async function fetchWorlds(){
+  if(location.protocol==='file:') return;
+  try{
+    const r=await fetch('/worlds');
+    if(!r.ok) return;
+    const list=await r.json();
+    if(!Array.isArray(list)||!list.length){ worldsEl.style.display='none'; return; }
+    worldsEl.style.display='flex';
+    worldsEl.textContent='';
+    const h=document.createElement('h3'); h.textContent='Colonies'; worldsEl.appendChild(h);
+    for(const w of list.slice(0,8)){
+      const b=document.createElement('button'); b.className='wrow'; b.type='button';
+      const nm=document.createElement('span'); nm.textContent=w.name;
+      const meta=document.createElement('span'); meta.className='meta';
+      meta.textContent=(w.players?w.players+' online':'empty')+' · '+(w.edits||0)+' blocks changed';
+      b.appendChild(nm); b.appendChild(meta);
+      b.addEventListener('click',()=>{
+        if(w.name===WORLD){ pworldEl.value=WORLD; return; }
+        saveNow(); location.search='?world='+encodeURIComponent(w.name);
+      });
+      worldsEl.appendChild(b);
+    }
+  }catch(e){}
+}
+fetchWorlds();
+
+/* ================= terraforming ================= */
+// The planet's state is derived from the shared edit list, so every player
+// computes identical O2/temperature from the same data — no extra netcode.
+const TERRA_SET=new Set([6,11,12,13,14]);
+const O2W={6:.12,11:.02,12:.06,13:.1,14:0};
+const GROW={11:{next:12,p:1/40},12:{next:13,p:1/60},13:{next:0,p:1/90}}; // shrub grows a tree
+const terraMap=new Map(), encCache=new Map();
+const STATS={o2:.2,temp:-58,plants:0,melted:false,verdant:false,pocket:.2,sheltered:false};
+const FOG=[.16,.11,.10]; // thin dead-world sky; computeStats lerps it toward blue
+function rebuildTerra(){
+  terraMap.clear(); encCache.clear();
+  for(const [ck,em] of editsByChunk){
+    const [ccx,ccz]=ck.split(',').map(Number);
+    for(const [idx,id] of em){
+      if(!TERRA_SET.has(id)) continue;
+      terraMap.set((ccx*16+(idx&15))+','+(idx>>8)+','+(ccz*16+((idx>>4)&15)),id);
+    }
+  }
+  computeStats(true);
+}
+function computeStats(quiet){
+  let o2=.2,heat=0,plants=0;
+  for(const id of terraMap.values()){
+    o2+=O2W[id]||0;
+    if(id===14) heat+=3; else plants++;
+  }
+  STATS.o2=Math.min(21,o2);
+  STATS.temp=Math.min(28,-58+heat+STATS.o2*1.6);
+  STATS.plants=plants;
+  const melted=STATS.temp>=0, verdant=STATS.o2>=12&&STATS.temp>=5;
+  const changed=melted!==STATS.melted||verdant!==STATS.verdant;
+  const gained=(melted&&!STATS.melted)||(verdant&&!STATS.verdant);
+  STATS.melted=melted; STATS.verdant=verdant;
+  if(changed&&!quiet){
+    toast(gained
+      ?(verdant?'The planet is turning green!':'The ice is melting — open water!')
+      :'The planet is cooling — the lakes refreeze…');
+    regenAll();
+  }
+  // sky thickens from rust-dark toward blue as the atmosphere builds
+  const a=Math.max(0,Math.min(1,(STATS.o2-.2)/11));
+  FOG[0]=.16+(.55-.16)*a; FOG[1]=.11+(.75-.11)*a; FOG[2]=.10+(.95-.10)*a;
+}
+function regenAll(){ // seed+edits fully describe the world, so this is lossless
+  for(const ch of chunks.values()){ freeMesh(ch.solid); freeMesh(ch.water); }
+  chunks.clear(); dirty.clear();
+  const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
+  for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++) genChunk(pcx+dx,pcz+dz);
+}
+function floodAir(sx,sy,sz,budget){ // BFS through air; null = open to the sky
+  const seen=new Set([sx+','+sy+','+sz]), q=[[sx,sy,sz]];
+  const D=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  while(q.length){
+    const [x,y,z]=q.pop();
+    if(y>=CY-1||seen.size>budget) return null;
+    for(const d of D){
+      const nx=x+d[0],ny=y+d[1],nz=z+d[2],k=nx+','+ny+','+nz;
+      if(seen.has(k)) continue;
+      if(getBlock(nx,ny,nz)===0){ seen.add(k); q.push([nx,ny,nz]); }
+    }
+  }
+  return seen;
+}
+function isEnclosed(x,y,z){
+  const k=x+','+y+','+z;
+  if(encCache.has(k)) return encCache.get(k);
+  const enc=getBlock(x,y+1,z)===0 ? floodAir(x,y+1,z,350)!==null : false;
+  encCache.set(k,enc);
+  return enc;
+}
+function growTree(x,y,z){
+  const th=3+strHash(x+','+z)%3;
+  setBlock(x,y,z,5);
+  for(let i=1;i<th;i++) if(getBlock(x,y+i,z)===0) setBlock(x,y+i,z,5);
+  for(let dy=th-1;dy<=th+1;dy++) for(let ox=-1;ox<=1;ox++) for(let oz=-1;oz<=1;oz++){
+    if(dy===th+1&&Math.abs(ox)+Math.abs(oz)>1) continue;
+    if(ox===0&&oz===0&&dy<th) continue;
+    if(getBlock(x+ox,y+dy,z+oz)===0) setBlock(x+ox,y+dy,z+oz,6);
+  }
+}
+const terraEl=document.getElementById('terra');
+function stageName(){
+  if(STATS.verdant) return 'Verdant';
+  if(STATS.o2>=10) return 'Breathable';
+  if(STATS.melted) return 'Meltwater';
+  if(STATS.temp>-30) return 'Thawing';
+  if(STATS.plants>0) return 'First Life';
+  return 'Dead Rock';
+}
+function nextGoal(){
+  if(!STATS.plants) return 'craft lichen (ice + regolith), plant it';
+  if(STATS.temp<0) return 'reach 0°C — build heaters, grow plants';
+  if(STATS.o2<10) return 'reach 10% O₂ — grow forests';
+  if(!STATS.verdant) return 'reach 12% O₂ and 5°C';
+  return 'the world lives. keep building';
+}
+function updateTerraHUD(){
+  terraEl.textContent='';
+  const add=(cls,html)=>{ const s=document.createElement('span'); if(cls)s.className=cls; s.innerHTML=html; terraEl.appendChild(s); };
+  add('stg',stageName());
+  add('','O₂ <b>'+STATS.o2.toFixed(2)+'%</b>'+
+    (STATS.sheltered?' · pocket <b>'+STATS.pocket.toFixed(1)+'%</b>':''));
+  add('','temp <b>'+STATS.temp.toFixed(1)+'°C</b>');
+  add('','plants <b>'+STATS.plants+'</b>');
+  add('goal','→ '+nextGoal());
+}
+let tickN=0;
+setInterval(()=>{
+  tickN++;
+  const tempM=Math.max(.3,Math.min(2.2,.4+(STATS.temp+60)/70));
+  for(const [k,id] of terraMap){
+    const g=GROW[id]; if(!g) continue;
+    const [x,y,z]=k.split(',').map(Number);
+    if(!chunks.has((x>>4)+','+(z>>4))) continue; // only tick loaded ground
+    const encM=isEnclosed(x,y,z)?3:1; // sealed air pockets grow much faster
+    if(Math.random()<g.p*tempM*encM){
+      if(g.next) setBlock(x,y,z,g.next); else growTree(x,y,z);
+    }
+  }
+  computeStats(false);
+  if(tickN%2===0){ // sheltered spaces concentrate the O2 of the plants inside
+    const hx=Math.floor(P.x),hy=Math.floor(P.y+EYE),hz=Math.floor(P.z);
+    const vol=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,350):null;
+    if(vol){
+      let n=0;
+      for(const key of terraMap.keys()){
+        const [ax,ay,az]=key.split(',').map(Number);
+        if(vol.has(ax+','+(ay+1)+','+az)) n++;
+      }
+      STATS.sheltered=true; STATS.pocket=Math.min(24,STATS.o2+n*.5);
+    }else{ STATS.sheltered=false; STATS.pocket=STATS.o2; }
+  }
+  updateTerraHUD();
+},1000);
+rebuildTerra(); updateTerraHUD();
 
 /* ================= chunk streaming ================= */
 function ensureChunks(){
@@ -862,7 +1093,6 @@ for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++)
   genChunk((Math.floor(P.x)>>4)+dx,(Math.floor(P.z)>>4)+dz);
 
 /* ================= render ================= */
-const FOG=[.55,.75,.95];
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   cv.width=innerWidth*dpr; cv.height=innerHeight*dpr;
