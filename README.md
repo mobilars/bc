@@ -65,7 +65,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 - Drain: **~8 minutes per tank** in dead air; much faster underwater. Refill: **lander** (fast), sealed pocket at ≥10% O₂ (slow), breathable planet air (trickle).
 - **<25%**: alarm pips + reddening screen edges. **<20%: exhausted** — you cannot mine or place blocks, walk at half speed, jump weakly. **<10%**: critical alarm. **0%**: blackout, revived at the lander.
 
-**Mining** — hold left click (or the ⛏ button) with the crosshair on a block; a progress bar under the crosshair fills and the block pops when it completes. Hardness varies: plants ~0.3s, regolith 0.45s, ice 0.6s, rock/cut rock 1s, basalt 1.5s, **plutonium 1.9s**. Switching targets resets progress; keep holding to chew through a tunnel block by block. Creative mode still insta-mines.
+**Mining** — hold left click (or the ⛏ button) with the crosshair on a block; a progress bar under the crosshair fills and the block pops when it completes. Hardness roughly tracks value: plants ~0.3s, regolith 0.45s, ice 0.6s, rock/cut rock 1s, beacons 1.1s, heaters 1.4s, basalt 1.6s, **plutonium 2.6s**. Switching targets resets progress; keep holding to chew through a tunnel block by block. Creative mode still insta-mines.
 
 **Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
 
