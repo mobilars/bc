@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BlockCraft — voxel sandbox</title>
 <style>
   :root{
@@ -67,7 +72,8 @@
   #touchwarn{display:none;margin-top:14px;color:#ffb98a;font-size:13px}
   @media (prefers-reduced-motion:reduce){.slot{transition:none}}
 </style>
-
+</head>
+<body>
 <canvas id="gl"></canvas>
 <div id="tint"></div>
 <div id="cross"></div>
@@ -699,3 +705,5 @@ function frame(t){
 }
 requestAnimationFrame(frame);
 </script>
+</body>
+</html>
