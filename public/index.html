@@ -2046,14 +2046,36 @@ function updateTerraHUD(){
   add('','plants <b>'+STATS.plants+'</b>');
   add('goal','→ '+nextGoal());
 }
+// Once the world is warm (≥5°C) and the air is thickening (≥8% O₂), life seeds
+// itself: moss, shrubs and tree canopies drop lichen onto nearby bare regolith.
+const SPREAD={6:1/600,12:1/450,13:1/350}; // chance per block per second
+let spreadWas=false;
 setInterval(()=>{
   // colder than -5°C nothing but lichen really grows; above it, warmth accelerates
   const tempMul=t=>t<-5?.03:Math.min(2.2,.7+(t+5)/22);
   const tempM=tempMul(STATS.temp);
+  const spreadOK=STATS.temp>=5&&STATS.o2>=8;
+  if(spreadOK!==spreadWas){
+    spreadWas=spreadOK;
+    if(spreadOK&&uiActive()) toast('Warm air, thickening sky — life is spreading on its own');
+  }
   for(const [k,id] of terraMap){
-    const g=GROW[id]; if(!g) continue;
+    const g=GROW[id],sp=SPREAD[id];
+    if(!g&&!sp) continue;
     const [x,y,z]=k.split(',').map(Number);
     if(!chunks.has((x>>4)+','+(z>>4))) continue; // only tick loaded ground
+    if(spreadOK&&sp&&Math.random()<sp){ // a seed drifts to a neighbouring column
+      const tx=x+((Math.random()*3)|0)-1, tz=z+((Math.random()*3)|0)-1;
+      if(tx!==x||tz!==z){
+        let ty=y+1;
+        if(getBlock(tx,ty,tz)===0){
+          while(ty>y-7&&getBlock(tx,ty-1,tz)===0) ty--; // the seed falls to ground
+          const below=getBlock(tx,ty-1,tz);
+          if((below===1||below===15)&&getBlock(tx,ty,tz)===0) setBlock(tx,ty,tz,11);
+        }
+      }
+    }
+    if(!g) continue;
     const pi=pocketInfo(x,y,z); // sealed air pockets grow much faster,
     const encM=pi.enc?3:1;      // and heated ones use their own warm local temp
     const lightM=sunlit(x,y,z)?1:.5; // windowless caves grow at half speed
