@@ -63,6 +63,7 @@
   #terra .stg{color:var(--gold);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
   #terra .goal{color:var(--sage)}
   #terra .pkt{color:#6fd3c3;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+  #terra .lk{color:#e0a45c;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
 
   #suit{position:fixed;right:12px;bottom:14px;display:none;align-items:center;gap:8px;
     font:600 11px var(--mono);color:var(--bone);background:rgba(20,12,22,.62);
@@ -241,7 +242,8 @@ function landerY(){ return Math.max(heightAt(8,8),SEA+1); } // spawn pad height
 // ids: 1 regolith 2 rock 3 basalt 4 ice 5 alien trunk 6 canopy 7 timber
 //      8 cut rock 9 glass 10 water 11 lichen 12 moss 13 shrub 14 heater 15 verdant regolith
 //      16 air vent (walk-through membrane that keeps O2 in) 17 grazer nest (spawns a critter)
-const WATER=10, GLASS=9, VENT=16, NEST=17;
+//      18 beacon (shines a lander-gold locator beam)
+const WATER=10, GLASS=9, VENT=16, NEST=17, BEACON=18;
 const INFO={
   1:{n:'Regolith',t:0, s:1, b:1, icon:0},
   2:{n:'Rock',    t:2, s:2, b:2, icon:2},
@@ -260,12 +262,13 @@ const INFO={
   15:{n:'Verdant Regolith',t:15,s:1,b:1,icon:15},
   16:{n:'Air Vent',t:20,s:20,b:20,icon:20}, // blocks airflow, not people
   17:{n:'Grazer',t:21,s:21,b:21,icon:21},   // placing the den spawns the animal
+  18:{n:'Beacon',t:22,s:22,b:22,icon:22},   // same gold beam as the lander's
 };
 const isOpaque=id=>id!==0&&id!==GLASS&&id!==WATER&&id!==VENT;
 const isSolid=id=>id!==0&&id!==WATER&&id!==VENT; // vents are walk-through
-const HOTBAR=[1,2,8,7,9,4,11,14,17,16]; // basalt lives in inventory only (heater fuel)
+const HOTBAR=[1,2,8,7,9,18,11,14,17,16]; // basalt and ice live in inventory only (ingredients)
 // what mining a block yields (0 = nothing; plants regress to lichen)
-const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17};
+const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18};
 
 const atlas=document.createElement('canvas'); atlas.width=512; atlas.height=16;
 const ac=atlas.getContext('2d');
@@ -325,6 +328,9 @@ function buildAtlas(){
   tileNoise(17,[196,90,70],14);                       // suit colors
   tileNoise(18,[86,120,196],14);
   tileNoise(19,[198,162,86],14);
+  tileNoise(22,[238,198,112],16);                     // beacon: sun-warm lamp
+  ac.fillStyle='rgb(255,246,208)'; ac.fillRect(22*16+5,5,6,6);
+  for(const [bx,by] of [[1,1],[14,1],[1,14],[14,14]]) px(22,bx,by,'rgb(122,92,58)');
   tileNoise(21,[156,122,168],22);                     // grazer fur (lavender, teal flecks)
   for(let k=0;k<14;k++) px(21,rnd16(),rnd16(),'rgb(96,168,150)');
   for(let k=0;k<8;k++) px(21,rnd16(),rnd16(),'rgb(110,84,124)');
@@ -445,6 +451,7 @@ function applyBlock(x,y,z,id){ // write a block into the live world (local or re
   const tk=x+','+y+','+z;
   if(TERRA_SET.has(id)) terraMap.set(tk,id); else terraMap.delete(tk);
   if(id===NEST) critters.set(tk,newCritter(x,y,z)); else critters.delete(tk);
+  if(id===BEACON) beacons.set(tk,1); else beacons.delete(tk);
   encCache.clear(); lightCache.clear(); // seals or skylights may have changed
   const ch=chunks.get(cx+','+cz);
   if(!ch) return;
@@ -719,6 +726,7 @@ const CRAFT={
   7:{cost:[[5,1]],n:4},         // timber: milled alien trunk
   16:{cost:[[7,2],[9,1]],n:2},  // air vent: timber lattice sealed with glass film
   17:{cost:[[11,2],[4,1]],n:1}, // grazer: cultured from lichen + meltwater ice
+  18:{cost:[[9,2],[3,1]],n:1},  // beacon: glass lens over a hot basalt core
 };
 const costText=r=>r.cost.map(c=>c[1]+' '+INFO[c[0]].n.toLowerCase()).join(' + ');
 function craft(){
@@ -989,6 +997,13 @@ function drawBeams(proj,view){ // blend pass: depth-tested but not depth-written
   gl.uniform3f(L.uOff,8.5,landerY()+2,8.5);
   gl.uniform4f(L.uColor,1,.72,.3,.4);
   gl.drawArrays(gl.TRIANGLES,0,12);
+  gl.uniform4f(L.uColor,1,.72,.3,.32); // player-placed beacons: the same station gold
+  for(const k of beacons.keys()){
+    const [x,y,z]=k.split(',').map(Number);
+    if(Math.abs(x-P.x)>150||Math.abs(z-P.z)>150) continue;
+    gl.uniform3f(L.uOff,x+.5,y+1,z+.5);
+    gl.drawArrays(gl.TRIANGLES,0,12);
+  }
   for(const p of MP.players.values()){
     if(p.ty<-900) continue;
     const c=BEAMC[strHash(p.name)%3];
@@ -1083,15 +1098,17 @@ const O2W={6:.0045,11:.0008,12:.002,13:.0035,14:0};
 const GROW={11:{next:12,p:1/40},12:{next:13,p:1/60},13:{next:0,p:1/90}}; // shrub grows a tree
 const terraMap=new Map(), encCache=new Map(), lightCache=new Map();
 const critters=new Map(); // nest block key -> its grazer (cosmetic, simulated locally)
-const STATS={o2:.2,temp:-58,plants:0,melted:false,verdant:false,pocket:.2,pocketTemp:-58,sheltered:false};
+const beacons=new Map();  // placed beacon blocks: each shines a lander-gold beam
+const STATS={o2:.2,temp:-58,plants:0,melted:false,verdant:false,pocket:.2,pocketTemp:-58,sheltered:false,leak:null,covered:false};
 const FOG=[.16,.11,.10]; // thin dead-world sky; computeStats lerps it toward blue
 function rebuildTerra(){
-  terraMap.clear(); encCache.clear(); lightCache.clear(); critters.clear();
+  terraMap.clear(); encCache.clear(); lightCache.clear(); critters.clear(); beacons.clear();
   for(const [ck,em] of editsByChunk){
     const [ccx,ccz]=ck.split(',').map(Number);
     for(const [idx,id] of em){
       const x=ccx*16+(idx&15),y=idx>>8,z=ccz*16+((idx>>4)&15);
       if(id===NEST) critters.set(x+','+y+','+z,newCritter(x,y,z));
+      if(id===BEACON) beacons.set(x+','+y+','+z,1);
       if(!TERRA_SET.has(id)) continue;
       terraMap.set(x+','+y+','+z,id);
     }
@@ -1127,14 +1144,16 @@ function regenAll(){ // seed+edits fully describe the world, so this is lossless
   const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
   for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++) genChunk(pcx+dx,pcz+dz);
 }
-// BFS through air; null = open to the sky. Any non-air block seals — including
-// vents, which is what makes them airtight doors you can still walk through.
+// BFS through air; a Set of cells when sealed, 'sky' when it escapes upward,
+// 'big' when over budget. Any non-air block seals — including vents, which is
+// what makes them airtight doors you can still walk through.
 function floodAir(sx,sy,sz,budget){
   const seen=new Set([sx+','+sy+','+sz]), q=[[sx,sy,sz]];
   const D=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
   while(q.length){
     const [x,y,z]=q.pop();
-    if(y>=CY-1||seen.size>budget) return null;
+    if(y>=CY-1) return 'sky';
+    if(seen.size>budget) return 'big';
     for(const d of D){
       const nx=x+d[0],ny=y+d[1],nz=z+d[2],k=nx+','+ny+','+nz;
       if(seen.has(k)) continue;
@@ -1143,17 +1162,22 @@ function floodAir(sx,sy,sz,budget){
   }
   return seen;
 }
+// a heater warms a pocket if any of its faces touches the pocket's air
+const touchesVol=(vol,x,y,z)=>vol.has(x+','+(y+1)+','+z)||vol.has(x+','+(y-1)+','+z)||
+  vol.has((x+1)+','+y+','+z)||vol.has((x-1)+','+y+','+z)||
+  vol.has(x+','+y+','+(z+1))||vol.has(x+','+y+','+(z-1));
 // Is the space above (x,y,z) sealed, and how many heaters share that pocket?
 // Heat trapped in a small space matters far more than heat lost to a dead sky.
 function pocketInfo(x,y,z){
   const k=x+','+y+','+z;
   if(encCache.has(k)) return encCache.get(k);
-  const vol=getBlock(x,y+1,z)===0?floodAir(x,y+1,z,800):null;
+  const r=getBlock(x,y+1,z)===0?floodAir(x,y+1,z,800):null;
+  const vol=r instanceof Set?r:null;
   let heat=0;
   if(vol) for(const [pk,id] of terraMap){
     if(id!==14) continue;
     const [ax,ay,az]=pk.split(',').map(Number);
-    if(vol.has(ax+','+(ay+1)+','+az)) heat++;
+    if(touchesVol(vol,ax,ay,az)) heat++;
   }
   const info={enc:!!vol,heat};
   encCache.set(k,info);
@@ -1204,6 +1228,8 @@ function updateTerraHUD(){
   const add=(cls,html)=>{ const s=document.createElement('span'); if(cls)s.className=cls; s.innerHTML=html; terraEl.appendChild(s); };
   add('stg',stageName());
   if(STATS.sheltered) add('pkt','● sealed pocket'); // you'd never guess otherwise
+  else if(STATS.covered&&STATS.leak==='big') add('lk','◌ cave too big to pressurize');
+  else if(STATS.covered&&STATS.leak==='sky') add('lk','◌ unsealed — air escapes somewhere');
   add('','O₂ <b>'+STATS.o2.toFixed(2)+'%</b>'+
     (STATS.sheltered?' · pocket <b>'+STATS.pocket.toFixed(1)+'%</b>':''));
   add('','temp <b>'+STATS.temp.toFixed(1)+'°C</b>'+
@@ -1232,19 +1258,24 @@ setInterval(()=>{
   { // sheltered spaces concentrate the O2 of the plants inside
     const was=STATS.sheltered;
     const hx=Math.floor(P.x),hy=Math.floor(P.y+EYE),hz=Math.floor(P.z);
-    const vol=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,800):null;
+    const r=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,800):'sky';
+    const vol=r instanceof Set?r:null;
     if(vol){
       let n=0,h=0;
       for(const [key,id] of terraMap){
         const [ax,ay,az]=key.split(',').map(Number);
-        if(!vol.has(ax+','+(ay+1)+','+az)) continue;
-        if(id===14) h++; else n++;
+        if(id===14){ if(touchesVol(vol,ax,ay,az)) h++; }
+        else if(vol.has(ax+','+(ay+1)+','+az)) n++;
       }
-      STATS.sheltered=true;
+      STATS.sheltered=true; STATS.leak=null;
       // ~.1% per exposed plant block: a dozen indoor trees make a pocket breathable
       STATS.pocket=Math.min(24,STATS.o2+n*.1);
       STATS.pocketTemp=pocketTempOf(h);
-    }else{ STATS.sheltered=false; STATS.pocket=STATS.o2; STATS.pocketTemp=STATS.temp; }
+    }else{
+      STATS.sheltered=false; STATS.leak=r; STATS.pocket=STATS.o2; STATS.pocketTemp=STATS.temp;
+    }
+    STATS.covered=false; // roofed but unsealed means a leak worth hunting
+    for(let yy=hy+1;yy<CY;yy++) if(getBlock(hx,yy,hz)!==0){ STATS.covered=true; break; }
     if(STATS.sheltered!==was&&uiActive()){ // teach the seal the moment it changes
       if(STATS.sheltered){ toast('Pocket sealed — '+STATS.pocket.toFixed(1)+'% O₂ inside'); beep(760,.12); }
       else{ toast('Pocket open — air leaks to the sky'); beep(300,.16); }

@@ -44,13 +44,14 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 **Plant growth** — each planted block steps lichen → moss → shrub → tree at a base rate (~40s/60s/90s per step), scaled by:
 - **Temperature**: below **−5°C** growth is ~×0.03 (dormant); above it, ×0.7 scaling up to ×2.2 at 28°C. **Lichen is exempt** — it keeps a ×0.3 floor in any cold, so the first step always works.
 - **Enclosure ×3**: a sealed air pocket concentrates warmth and moisture.
-- **Local warmth**: plants in a sealed pocket use the *pocket's* temperature: **+6°C per heater sharing the pocket** (cap 35°C). Nine heaters lift a −58°C cave past the −5°C growth gate.
+- **Local warmth**: plants in a sealed pocket use the *pocket's* temperature: **+6°C per heater touching the pocket's air** (any face counts — a heater fully buried in a wall warms nothing; cap 35°C). Nine heaters lift a −58°C cave past the −5°C growth gate.
 - **Sunlight ×1 / ×0.5**: a plant is sunlit if the column straight above it holds only air or **glass** — windows are real. Windowless caves grow at half speed; a glass roof fixes that.
 
 **Air pockets** — a flood-fill from the air block above a plant (or from your head). Sealed = the flood neither reaches the sky nor exceeds **~800 air blocks**. One gap breaks the seal. Anything solid seals — including:
 - **Air vents** (2 timber + 1 glass → 2): airtight but walk-through. A vented doorway keeps the pocket pressurized with no airlock dance.
 - **Glass**: seals air *and* passes light — the greenhouse block.
 - Standing in a sealed pocket the HUD shows a teal **● sealed pocket** badge plus its concentrated stats: pocket O₂ = planet O₂ + **0.1% per plant block with air above it** (cap 24%) → **~a dozen trees make a pocket breathable**; pocket temp = planet temp + 6°C per heater. Sealing or breaking a pocket announces itself with a toast and a chirp the moment it happens.
+- If you're under a roof but *not* sealed, the HUD says why in amber: **◌ unsealed — air escapes somewhere** (hunt the hole) or **◌ cave too big to pressurize** (wall off a smaller chamber).
 
 **Suit O₂** (gauge bottom-right; drains only when the local air is unbreathable)
 - Drain: **~8 minutes per tank** in dead air; much faster underwater. Refill: **lander** (fast), sealed pocket at ≥10% O₂ (slow), breathable planet air (trickle).
@@ -58,9 +59,11 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
 
+**Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt and ice aren't on the hotbar — they live in inventory as crafting ingredients.)
+
 ## How it works
 
-The client (`public/index.html`): raw WebGL 1 renderer (chunk meshing, translucent water pass, dynamic sky/fog), value-noise terrain with 3D-noise caves, procedural 22-tile texture atlas on a canvas, AABB physics, survival inventory + crafting, growth simulation with flood-fill enclosure and skylight detection, remote players as suited avatars with name tags, wandering grazer critters. A world is just `seed + edit list`: single-player saves to `localStorage`, multiplayer worlds live on the server, and milestone changes (ice→water, verdant ground) regenerate terrain losslessly from that same data.
+The client (`public/index.html`): raw WebGL 1 renderer (chunk meshing, translucent water pass, dynamic sky/fog), value-noise terrain with 3D-noise caves, procedural 23-tile texture atlas on a canvas, AABB physics, survival inventory + crafting, growth simulation with flood-fill enclosure and skylight detection, remote players as suited avatars with name tags, wandering grazer critters. A world is just `seed + edit list`: single-player saves to `localStorage`, multiplayer worlds live on the server, and milestone changes (ice→water, verdant ground) regenerate terrain losslessly from that same data.
 
 The server (`src/server.js`): one Cloudflare Durable Object per colony stores the seed and edit history and relays edits/positions over WebSockets (hibernation API — idle worlds cost nothing). A singleton Lobby object tracks colonies for the `/worlds` menu list. Everything fits Cloudflare's free tier.
 
