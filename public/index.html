@@ -1084,6 +1084,10 @@ document.addEventListener('keydown',e=>{
     creative=!creative; saveDirty=true; updateSlots();
     toast(creative?'Creative mode — infinite blocks':'Survival mode — mine to build');
     sfx(creative?400:300,creative?620:200,.09,'triangle');
+    if(MP.on){ // the colony gets told, and your beam turns magenta
+      const msg=creative?'✦ entered creative mode':'✦ back to survival';
+      mpSend({t:'chat',msg}); addChat(myName,msg);
+    }
   }
   if(e.code.startsWith('Digit')){ const d=e.code==='Digit0'?10:+e.code.slice(5); if(d>=1&&d<=HOTBAR.length) selectSlot(d-1); }
   if(e.code==='Space') e.preventDefault();
@@ -1666,7 +1670,7 @@ function updateStatus(){
     :'offline · seed '+(SEED>>>0).toString(36);
 }
 function removeTag(id){ const el=tagEls.get(id); if(el){ el.remove(); tagEls.delete(id); } }
-function newRemote(name){ return {name,x:0,y:-999,z:0,tx:0,ty:-999,tz:0,yaw:0}; }
+function newRemote(name){ return {name,x:0,y:-999,z:0,tx:0,ty:-999,tz:0,yaw:0,creative:false}; }
 function resetWorld(){ // the server's seed replaced ours: regenerate everything
   for(const ch of chunks.values()){ freeMesh(ch.solid); freeMesh(ch.water); }
   chunks.clear(); dirty.clear();
@@ -1724,7 +1728,7 @@ function connect(){
       let p=MP.players.get(m.id);
       if(!p){ p=newRemote('player'); MP.players.set(m.id,p); }
       if(p.ty<-900){ p.x=m.x; p.y=m.y; p.z=m.z; }
-      p.tx=m.x; p.ty=m.y; p.tz=m.z; p.yaw=m.yaw;
+      p.tx=m.x; p.ty=m.y; p.tz=m.z; p.yaw=m.yaw; p.creative=!!m.c;
     }else if(m.t==='joined'){
       MP.players.set(m.id,newRemote(m.name));
       toast(m.name+' joined'); addChat('',m.name+' joined',true);
@@ -1755,7 +1759,7 @@ function connect(){
 connect(); updateStatus();
 setInterval(()=>{
   if(MP.on&&uiActive())
-    mpSend({t:'pos',x:+P.x.toFixed(2),y:+P.y.toFixed(2),z:+P.z.toFixed(2),yaw:+P.yaw.toFixed(3)});
+    mpSend({t:'pos',x:+P.x.toFixed(2),y:+P.y.toFixed(2),z:+P.z.toFixed(2),yaw:+P.yaw.toFixed(3),c:creative?1:0});
 },100);
 setInterval(()=>{ if(MP.on) saveNow(); },4000);
 
@@ -1804,9 +1808,10 @@ function drawBeams(proj,view){ // blend pass: depth-tested but not depth-written
   }
   for(const p of MP.players.values()){
     if(p.ty<-900) continue;
-    const c=BEAMC[strHash(p.name)%3];
+    // creative players glow magenta so everyone knows who's building unbound
+    const c=p.creative?[.9,.35,.95]:BEAMC[strHash(p.name)%3];
     gl.uniform3f(L.uOff,p.x,p.y+1.9,p.z);
-    gl.uniform4f(L.uColor,c[0],c[1],c[2],.3);
+    gl.uniform4f(L.uColor,c[0],c[1],c[2],p.creative?.38:.3);
     gl.drawArrays(gl.TRIANGLES,0,12);
   }
 }
@@ -1848,6 +1853,8 @@ function updateTags(){
       el=document.createElement('div'); el.className='tag';
       el.textContent=p.name; tagsEl.appendChild(el); tagEls.set(id,el);
     }
+    const label=p.name+(p.creative?' ◆':'');
+    if(el.textContent!==label) el.textContent=label;
     const X=p.x,Y=p.y+1.95,Z=p.z;
     const w=lastPV[3]*X+lastPV[7]*Y+lastPV[11]*Z+lastPV[15];
     const dist=Math.hypot(X-P.x,Y-P.y,Z-P.z);

@@ -80,7 +80,8 @@ export class World {
     if (!a) return;
 
     if (m.t === 'pos' && [m.x, m.y, m.z, m.yaw].every(Number.isFinite)) {
-      this.broadcast(ws, { t: 'pos', id: a.id, x: m.x, y: m.y, z: m.z, yaw: m.yaw });
+      // c: creative flag, so clients can tint that player's locator beam
+      this.broadcast(ws, { t: 'pos', id: a.id, x: m.x, y: m.y, z: m.z, yaw: m.yaw, c: m.c ? 1 : 0 });
     } else if (m.t === 'chat' && typeof m.msg === 'string') {
       const msg = m.msg.slice(0, 160).trim();
       if (!msg) return;
