@@ -8,7 +8,7 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 
 **Single player:** open [`public/index.html`](public/index.html) directly in a browser.
 
-**Multiplayer:** deploy (below) and share the URL. Everyone in the same *colony* (world) terraforms the same planet. The menu lists active colonies to join — or type a new name to found one (`?world=name` in the URL works too).
+**Multiplayer:** deploy (below) and share the URL. Everyone in the same *colony* (world) terraforms the same planet. The menu lists active colonies to join — or type a new name to found one (`?world=name` in the URL works too). Other colonists appear as suited avatars with name tags and a colored **locator beam** visible across the terrain; the top-left readout lists everyone's distance and bearing, and `T` opens chat.
 
 ### Controls
 
@@ -18,16 +18,20 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 | Left / right click | mine (collects the block) / place |
 | `1`–`9` or scroll wheel | pick block |
 | `C` | craft the selected block |
+| `T` or `Enter` | chat (multiplayer) |
 | `G` | creative mode (infinite blocks) |
 | `F` | toggle flight |
 | `Esc` | pause |
+
+Crafting works on the *selected hotbar slot*: select lichen (`7`), and the hint above the hotbar shows the recipe; press `C` to craft, then right-click to place. First goal: mine ice + regolith → craft lichen → plant it.
 
 ### Terraforming
 
 - **Lichen** is crafted from ice + regolith. Plant it and it grows: lichen → moss → shrub → alien tree. Every living block adds **O₂**.
 - **Heaters** (rock + basalt) raise **temperature**; O₂ adds greenhouse warming on top.
-- Plants in a **sealed air pocket** (caves, glass domes) grow 3× faster, and the HUD shows the concentrated pocket O₂ when you stand inside one.
+- Plants in a **sealed air pocket** (caves, glass domes) grow 3× faster, and the HUD shows the concentrated pocket O₂ when you stand inside one. The seal is literal — one open doorway leaks. There are no doors, so use a block as an airlock: seal the entrance behind you (glass makes a nice window) and mine it open to leave. Pockets over ~350 air blocks are too big to pressurize.
 - Milestones reshape the planet: above **0°C** the frozen lakes melt into open water; at **10% O₂** the air is breathable; at **12% O₂ + 5°C** the regolith itself turns green. The sky shifts from rust-dark to blue as the atmosphere thickens.
+- **Suit O₂**: until the planet is breathable, your suit tank drains slowly (~12 minutes per fill; faster underwater). Refill fast at the **crashed lander** at spawn — the glowing beacon on the cut-rock pad — or slowly inside a sealed pocket holding ≥10% O₂, which makes caves and greenhouses real outposts. Run dry and you black out, waking at the lander. The gauge sits bottom-right; once the atmosphere reaches 10% O₂ it reads AIR OK.
 
 The planet's O₂/temperature are computed deterministically from the shared block-edit list, so every player derives identical stats from the same data — terraforming needs no extra netcode.
 

@@ -58,6 +58,14 @@ export class World {
 
     if (m.t === 'pos' && [m.x, m.y, m.z, m.yaw].every(Number.isFinite)) {
       this.broadcast(ws, { t: 'pos', id: a.id, x: m.x, y: m.y, z: m.z, yaw: m.yaw });
+    } else if (m.t === 'chat' && typeof m.msg === 'string') {
+      const msg = m.msg.slice(0, 160).trim();
+      if (!msg) return;
+      const now = Date.now();
+      if (!this.chatAt) this.chatAt = new Map();
+      if (now - (this.chatAt.get(a.id) || 0) < 400) return; // rate limit
+      this.chatAt.set(a.id, now);
+      this.broadcast(ws, { t: 'chat', id: a.id, name: a.name, msg });
     } else if (m.t === 'set'
         && [m.x, m.y, m.z, m.id].every(Number.isInteger)
         && m.y >= 0 && m.y < 64 && m.id >= 0 && m.id <= 15

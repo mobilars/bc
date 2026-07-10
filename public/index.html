@@ -61,6 +61,33 @@
   #terra .stg{color:var(--gold);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
   #terra .goal{color:var(--sage)}
 
+  #suit{position:fixed;right:12px;bottom:14px;display:none;align-items:center;gap:8px;
+    font:600 11px var(--mono);color:var(--bone);background:rgba(20,12,22,.62);
+    padding:7px 12px;border-radius:6px;pointer-events:none;text-transform:uppercase;
+    letter-spacing:.06em}
+  #suitbar{width:110px;height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+  #suitfill{height:100%;background:#5ec8d8;border-radius:5px;transition:width .3s linear}
+  #suit.low #suitfill{background:#ff5c4a}
+  #suit.low{animation:suitpulse 1s infinite}
+  @keyframes suitpulse{50%{box-shadow:0 0 0 2px rgba(255,92,74,.5)}}
+  #suitpct{min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+  #fade{position:fixed;inset:0;background:#000;opacity:0;transition:opacity .6s;
+    pointer-events:none;z-index:10}
+  @media (prefers-reduced-motion:reduce){#suit.low{animation:none}}
+
+  #chat{position:fixed;left:10px;bottom:84px;display:none;flex-direction:column;gap:3px;
+    font:12px/1.5 var(--mono);max-width:min(46vw,420px);pointer-events:none;z-index:5}
+  .crow{background:rgba(20,12,22,.55);padding:3px 9px;border-radius:5px;color:var(--bone);
+    animation:chatfade 11s forwards;overflow-wrap:anywhere}
+  .crow b{color:var(--gold);font-weight:700}
+  .crow.sys{color:var(--sage);font-style:italic}
+  #chat.open .crow{animation:none;opacity:1}
+  @keyframes chatfade{0%,80%{opacity:1}100%{opacity:0}}
+  #chatin{display:none;background:rgba(20,12,22,.82);border:1px solid var(--gold);
+    padding:4px 9px;border-radius:5px;color:var(--bone)}
+  #chat.open #chatin{display:block}
+  @media (prefers-reduced-motion:reduce){.crow{animation:none}}
+
   #worlds{display:none;flex-direction:column;gap:6px;margin-top:18px}
   #worlds h3{margin:0 0 2px;font:600 11px var(--mono);color:var(--sage);
     text-transform:uppercase;letter-spacing:.08em}
@@ -112,6 +139,9 @@
 <div id="tags"></div>
 <div id="debug"></div>
 <div id="terra"></div>
+<div id="chat"><div id="chatlog"></div><div id="chatin"></div></div>
+<div id="suit"><span>suit O₂</span><div id="suitbar"><div id="suitfill"></div></div><span id="suitpct"></span></div>
+<div id="fade"></div>
 
 <div id="menu">
   <div id="panel">
@@ -127,6 +157,7 @@
       <kbd>1–9 · wheel</kbd><span>pick block</span>
       <kbd>F</kbd><span>toggle flight</span>
       <kbd>C</kbd><span>craft selected</span>
+      <kbd>T</kbd><span>chat</span>
       <kbd>G</kbd><span>creative mode</span>
       <kbd>Esc</kbd><span>pause</span>
     </div>
@@ -159,7 +190,7 @@ try{
   }
 }catch(e){}
 function playerState(){
-  return {x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel};
+  return {x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel,tank:suitO2};
 }
 function saveNow(){
   try{
@@ -200,6 +231,7 @@ function heightAt(x,z){
   const d=fbm(x*.022,z*.022,4);             // detail
   return Math.max(3,Math.min(52,Math.floor(9+m*34+(d-.5)*11)));
 }
+function landerY(){ return Math.max(heightAt(8,8),SEA+1); } // spawn pad height
 
 /* ================= blocks & texture atlas ================= */
 // ids: 1 regolith 2 rock 3 basalt 4 ice 5 alien trunk 6 canopy 7 timber
@@ -447,6 +479,14 @@ function genChunk(cx,cz){
       else if(r<.018) put(lx,h+1,lz,2);  // boulder
     }
   }
+  if(cx===0&&cz===0){ // the crashed lander: spawn beacon and O2 refill point
+    const hh=landerY();
+    for(let x=7;x<=9;x++) for(let z=7;z<=9;z++){
+      put(x,hh,z,8);
+      for(let y=hh+1;y<hh+4;y++) put(x,y,z,0); // clear headroom on the pad
+    }
+    put(8,hh+1,8,14); put(8,hh+2,8,9);
+  }
   const em=editsByChunk.get(cx+','+cz);
   if(em) for(const [idx,id] of em) data[idx]=id;
   const ch={cx,cz,data,solid:null,water:null};
@@ -550,7 +590,7 @@ function updatePlayer(dt){
   moveAxis('x',dx*(f||r?speed:0)*dt);
   moveAxis('z',dz*(f||r?speed:0)*dt);
   moveAxis('y',P.vy*dt);
-  if(P.y<-12){ P.x=8.5; P.z=8.5; P.y=heightAt(8,8)+3; P.vy=0; }
+  if(P.y<-12){ P.x=8.5; P.z=8.5; P.y=landerY()+4; P.vy=0; }
 }
 
 /* ================= raycast ================= */
@@ -611,6 +651,8 @@ function setHUD(on){
   hotbarEl.style.display=on?'flex':'none';
   debugEl.style.display=on?'block':'none';
   document.getElementById('terra').style.display=on?'flex':'none';
+  document.getElementById('chat').style.display=on?'flex':'none';
+  document.getElementById('suit').style.display=on?'flex':'none';
   cv.style.cursor=on&&fallbackMode?'none':'';
   if(!on&&typeof fetchWorlds==='function') fetchWorlds();
 }
@@ -705,7 +747,7 @@ document.addEventListener('mousemove',e=>{
   P.pitch=Math.max(-1.55,Math.min(1.55,P.pitch-e.movementY*.0024));
 });
 document.addEventListener('mousedown',e=>{
-  if(!uiActive()) return;
+  if(!uiActive()||chatOpen) return;
   const hit=raycast(6);
   if(e.button===0&&hit){
     if(hit.y<=0) return; // bedrock floor
@@ -735,8 +777,27 @@ document.addEventListener('mousedown',e=>{
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',e=>{
+  if(chatOpen){ // typing captures the keyboard
+    if(e.code==='Enter'){
+      const t=chatBuf.trim().slice(0,160);
+      if(t){ addChat(myName,t); mpSend({t:'chat',msg:t}); }
+      chatBuf=''; chatOpen=false; renderChatIn();
+    }else if(e.code==='Escape'){ chatBuf=''; chatOpen=false; renderChatIn(); }
+    else if(e.code==='Backspace'){ chatBuf=chatBuf.slice(0,-1); renderChatIn(); }
+    else if(e.key&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&chatBuf.length<160){
+      chatBuf+=e.key; renderChatIn();
+    }
+    e.preventDefault(); return;
+  }
   keys[e.code]=true;
   if(!uiActive()) return;
+  if(e.code==='KeyT'||e.code==='Enter'){
+    if(MP.on){
+      for(const k in keys) keys[k]=false; // stop walking while typing
+      chatOpen=true; renderChatIn(); e.preventDefault();
+    }else toast('Chat is offline — no colony connection');
+    return;
+  }
   if(e.code==='Escape'&&fallbackMode) return pause();
   if(e.code==='KeyF'){ P.fly=!P.fly; P.vy=0; sfx(P.fly?500:260,P.fly?700:180,.08,'triangle'); }
   if(e.code==='KeyC') craft();
@@ -761,6 +822,20 @@ pnameEl.value=myName; pworldEl.value=WORLD;
 const MP={on:false,ws:null,id:null,players:new Map()};
 const tagEls=new Map();
 let lastPV=null;
+let chatOpen=false,chatBuf='';
+const chatEl=document.getElementById('chat');
+const chatlogEl=document.getElementById('chatlog'),chatinEl=document.getElementById('chatin');
+function addChat(name,msg,sys){
+  const row=document.createElement('div'); row.className='crow'+(sys?' sys':'');
+  if(!sys){ const b=document.createElement('b'); b.textContent=name+'  '; row.appendChild(b); }
+  row.appendChild(document.createTextNode(msg));
+  chatlogEl.appendChild(row);
+  while(chatlogEl.children.length>40) chatlogEl.firstChild.remove();
+}
+function renderChatIn(){
+  chatEl.classList.toggle('open',chatOpen);
+  chatinEl.textContent='> '+chatBuf+'▌';
+}
 function mpSend(o){ if(MP.on&&MP.ws&&MP.ws.readyState===1) MP.ws.send(JSON.stringify(o)); }
 function updateStatus(){
   statusEl.textContent=MP.on
@@ -777,8 +852,9 @@ function resetWorld(){ // the server's seed replaced ours: regenerate everything
   if(s&&s.player&&typeof s.player.x==='number'){
     Object.assign(P,s.player); inv=s.inv||{}; creative=!!s.creative;
   }else{
-    P.x=8.5; P.z=8.5; P.y=heightAt(8,8)+3; P.pitch=-.15; inv={}; creative=false;
+    P.x=8.5; P.z=8.5; P.y=landerY()+4; P.pitch=-.15; inv={}; creative=false;
   }
+  if(s&&s.player&&typeof s.player.tank==='number') suitO2=s.player.tank;
   P.vy=0; selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
   const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
   for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++) genChunk(pcx+dx,pcz+dz);
@@ -808,8 +884,10 @@ function connect(){
       resetWorld();
       document.getElementById('newworld').style.display='none';
       toast('Joined “'+WORLD+'” as '+myName);
+      addChat('','connected to “'+WORLD+'” — T to chat',true);
       updateStatus();
     }else if(m.t==='set'){ applyBlock(m.x,m.y,m.z,m.id); }
+    else if(m.t==='chat'){ addChat(m.name||'?',String(m.msg).slice(0,160)); }
     else if(m.t==='pos'){
       let p=MP.players.get(m.id);
       if(!p){ p=newRemote('player'); MP.players.set(m.id,p); }
@@ -817,11 +895,12 @@ function connect(){
       p.tx=m.x; p.ty=m.y; p.tz=m.z; p.yaw=m.yaw;
     }else if(m.t==='joined'){
       MP.players.set(m.id,newRemote(m.name));
-      toast(m.name+' joined'); updateStatus();
+      toast(m.name+' joined'); addChat('',m.name+' joined',true);
+      updateStatus();
     }else if(m.t==='leave'){
       const p=MP.players.get(m.id);
       MP.players.delete(m.id); removeTag(m.id);
-      if(p) toast(p.name+' left');
+      if(p){ toast(p.name+' left'); addChat('',p.name+' left',true); }
       updateStatus();
     }
   };
@@ -852,6 +931,34 @@ function pushBox(v,ii,cx,cy,cz,hx,h,hz,yaw,tile){
         (tile+.02+q[3]*.96)/32, .02+q[4]*.96, F.sh);
     }
     ii.push(base,base+1,base+2,base,base+2,base+3);
+  }
+}
+// locator beacon: two crossed translucent quads rising from each player
+const beamVbo=gl.createBuffer();
+{
+  const w=.09,H=78,v=[
+    -w,0,0,  w,0,0,  w,H,0,   -w,0,0,  w,H,0,  -w,H,0,
+    0,0,-w,  0,0,w,  0,H,w,   0,0,-w,  0,H,w,  0,H,-w,
+  ];
+  gl.bindBuffer(gl.ARRAY_BUFFER,beamVbo);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+}
+const BEAMC=[[.95,.44,.32],[.42,.58,.95],[.95,.78,.40]]; // matches suit tiles
+function drawBeams(proj,view){ // blend pass: depth-tested but not depth-written
+  if(!MP.players.size) return;
+  gl.useProgram(progL);
+  gl.uniformMatrix4fv(L.uProj,false,proj);
+  gl.uniformMatrix4fv(L.uView,false,view);
+  gl.bindBuffer(gl.ARRAY_BUFFER,beamVbo);
+  gl.enableVertexAttribArray(L.aPos);
+  gl.vertexAttribPointer(L.aPos,3,gl.FLOAT,false,0,0);
+  gl.disableVertexAttribArray(W.aUV); gl.disableVertexAttribArray(W.aShade);
+  for(const p of MP.players.values()){
+    if(p.ty<-900) continue;
+    const c=BEAMC[strHash(p.name)%3];
+    gl.uniform3f(L.uOff,p.x,p.y+1.9,p.z);
+    gl.uniform4f(L.uColor,c[0],c[1],c[2],.3);
+    gl.drawArrays(gl.TRIANGLES,0,12);
   }
 }
 const pVbo=gl.createBuffer(), pIbo=gl.createBuffer();
@@ -1060,6 +1167,51 @@ setInterval(()=>{
 },1000);
 rebuildTerra(); updateTerraHUD();
 
+/* ================= suit oxygen ================= */
+// The suit tank drains while the planet's air is unbreathable. Refill fast at
+// the lander, slowly inside sealed pockets with >=10% O2. Empty tank = blackout.
+let suitO2=100,fading=false,suitWarn=0;
+if(savedPlayer&&typeof savedPlayer.tank==='number') suitO2=savedPlayer.tank;
+const suitEl=document.getElementById('suit');
+const suitFill=document.getElementById('suitfill'),suitPct=document.getElementById('suitpct');
+const fadeEl=document.getElementById('fade');
+function blackout(){
+  fading=true; fadeEl.style.opacity=1;
+  setTimeout(()=>{
+    P.x=8.5; P.z=8.5; P.y=landerY()+4; P.vy=0;
+    suitO2=100; suitWarn=0; saveDirty=true;
+    setTimeout(()=>{
+      fadeEl.style.opacity=0; fading=false;
+      toast('Emergency systems revived you at the lander');
+      addChat('','suit O₂ ran out — revived at the lander',true);
+    },500);
+  },800);
+}
+function updateSuit(dt){
+  if(!uiActive()||fading) return;
+  const breathable=STATS.o2>=10;
+  const under=getBlock(Math.floor(P.x),Math.floor(P.y+EYE),Math.floor(P.z))===WATER;
+  const ly=landerY();
+  const atLander=Math.hypot(P.x-8.5,P.z-8.5)<7&&P.y>ly-3&&P.y<ly+10;
+  const pocketOK=STATS.sheltered&&STATS.pocket>=10;
+  let rate;
+  if(creative) rate=0;
+  else if(under) rate=-.9;                 // holding your breath
+  else if(atLander) rate=9;
+  else if(pocketOK) rate=2.5;
+  else if(breathable) rate=1;
+  else rate=-100/720;                      // ~12 minutes on a full tank
+  suitO2=Math.max(0,Math.min(100,suitO2+rate*dt));
+  if(suitO2<25&&suitWarn<1&&rate<0){ suitWarn=1; toast('Suit O₂ below 25% — get to air'); }
+  if(suitO2<10&&suitWarn<2&&rate<0){ suitWarn=2; toast('Suit O₂ critical!'); }
+  if(suitO2>30) suitWarn=0;
+  if(suitO2<=0) return blackout();
+  const safe=(breathable&&!under)||creative;
+  suitFill.style.width=suitO2+'%';
+  suitPct.textContent=creative?'∞':safe?'AIR OK':(rate>0?'▲ ':'')+Math.round(suitO2)+'%';
+  suitEl.classList.toggle('low',suitO2<25&&!safe);
+}
+
 /* ================= chunk streaming ================= */
 function ensureChunks(){
   const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
@@ -1140,6 +1292,7 @@ function render(){
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ch.water.ibo);
     gl.drawElements(gl.TRIANGLES,ch.water.count,ch.water.type,0);
   }
+  drawBeams(proj,view);
   gl.depthMask(true);
   gl.disable(gl.BLEND);
   if(uiActive()){
@@ -1166,6 +1319,7 @@ function frame(t){
   const dt=Math.min(.05,(t-last)/1000); last=t; frameN++;
   ensureChunks(); processDirty();
   if(uiActive()&&chunks.has((Math.floor(P.x)>>4)+','+(Math.floor(P.z)>>4))) updatePlayer(dt);
+  updateSuit(dt);
   updateRemotePlayers(dt);
   render();
   updateTags();
@@ -1176,10 +1330,20 @@ function frame(t){
     fps=Math.round(fpsN/fpsT); fpsN=0; fpsT=0;
     const dirs=['N','NE','E','SE','S','SW','W','NW'];
     const a=((-P.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+    let pl='',shown=0;
+    for(const p of MP.players.values()){
+      if(shown>=6){ pl+='\n…and '+(MP.players.size-shown)+' more'; break; }
+      shown++;
+      if(p.ty<-900){ pl+='\n@ '+p.name+' — no signal yet'; continue; }
+      const dx=p.x-P.x,dz=p.z-P.z;
+      const dist=Math.round(Math.hypot(dx,p.y-P.y,dz));
+      const b=Math.round(((Math.atan2(dx,-dz)*180/Math.PI+360)%360)/45)%8;
+      pl+='\n@ '+p.name+'  '+dist+'m '+dirs[b]+'  (y '+Math.round(p.y)+')';
+    }
     debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+(creative?'  ◆ creative':'')+
       '\nx '+P.x.toFixed(1)+'  y '+P.y.toFixed(1)+'  z '+P.z.toFixed(1)+
       '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8]+
-      (MP.on?'\nonline — '+(MP.players.size+1)+' in “'+WORLD+'”':'\noffline');
+      (MP.on?'\nonline — '+(MP.players.size+1)+' in “'+WORLD+'”':'\noffline')+pl;
   }
 }
 requestAnimationFrame(frame);
