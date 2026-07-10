@@ -1,3 +1,8 @@
+// PlanetCrafter — a voxel terraforming game.
+// Copyright (C) 2026 Lars Kristian Roland
+// Licensed under the GNU Affero General Public License v3.0 or later
+// (AGPL-3.0-or-later). See the LICENSE file in the repository root.
+//
 // PlanetCrafter multiplayer relay — one Durable Object per named world.
 // A world is fully described by (seed + block-edit history); the DO stores
 // both and relays edits and player positions to everyone connected.
@@ -6,6 +11,11 @@
 
 const MAX_MSG = 512;
 const REPORT_MS = 15000;
+
+async function sha256(s) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export class World {
   constructor(ctx, env) {
@@ -21,12 +31,25 @@ export class World {
     const url = new URL(req.url);
     const name = (url.searchParams.get('name') || 'colonist').slice(0, 20);
     const worldName = (url.searchParams.get('world') || 'outpost-1').slice(0, 32);
+    const pass = (url.searchParams.get('pass') || '').slice(0, 64);
     await this.ctx.storage.put('worldName', worldName);
 
     let seed = await this.ctx.storage.get('seed');
     if (seed === undefined) {
       seed = crypto.getRandomValues(new Int32Array(1))[0];
       await this.ctx.storage.put('seed', seed);
+      // a password supplied at creation locks the colony from then on
+      if (pass) await this.ctx.storage.put('pass', await sha256(pass));
+    } else {
+      const lock = await this.ctx.storage.get('pass');
+      if (lock && lock !== (pass ? await sha256(pass) : '')) {
+        // wrong or missing password: tell the client why, then hang up
+        const deny = new WebSocketPair();
+        deny[1].accept();
+        deny[1].send(JSON.stringify({ t: 'denied' }));
+        deny[1].close(1008, 'password');
+        return new Response(null, { status: 101, webSocket: deny[0] });
+      }
     }
 
     const pair = new WebSocketPair();
@@ -106,6 +129,7 @@ export class World {
             world: worldName,
             players: this.ctx.getWebSockets().length,
             edits: this.editCount || 0,
+            locked: !!(await this.ctx.storage.get('pass')),
           }),
         });
       } catch (e) {}
@@ -123,12 +147,12 @@ export class Lobby {
       try { b = await req.json(); } catch { return new Response('bad', { status: 400 }); }
       if (typeof b.world !== 'string' || !b.world) return new Response('bad', { status: 400 });
       await this.ctx.storage.put('w:' + b.world.slice(0, 32),
-        { players: b.players | 0, edits: b.edits | 0, ts: Date.now() });
+        { players: b.players | 0, edits: b.edits | 0, locked: !!b.locked, ts: Date.now() });
       return new Response('ok');
     }
     const out = [];
     for (const [k, v] of await this.ctx.storage.list({ prefix: 'w:' }))
-      out.push({ name: k.slice(2), players: v.players, edits: v.edits, ts: v.ts });
+      out.push({ name: k.slice(2), players: v.players, edits: v.edits, locked: !!v.locked, ts: v.ts });
     out.sort((a, b) => b.players - a.players || b.ts - a.ts);
     return Response.json(out.slice(0, 50));
   }

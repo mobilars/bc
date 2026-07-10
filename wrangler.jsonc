@@ -1,3 +1,5 @@
+// PlanetCrafter — Copyright (C) 2026 Lars Kristian Roland
+// AGPL-3.0-or-later; see the LICENSE file in the repository root.
 {
   "name": "planetcrafter",
   "main": "src/server.js",
