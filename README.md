@@ -40,7 +40,7 @@ The intended arc: **lichen first** (it tolerates any cold) → **heaters in a se
 
 ### Simulation rules
 
-The planet's O₂/temperature are computed deterministically from the shared block-edit list, so every player derives identical stats from the same data — terraforming needs no extra netcode. Grazer positions are the one exception: the *nest block* is shared data, the animal wandering around it is local and cosmetic.
+The planet's O₂/temperature are computed deterministically from the shared block-edit list, so every player derives identical stats from the same data — terraforming needs no extra netcode. Grazer positions are the one exception: the *nest block* is shared data, the animal wandering around it is local and cosmetic. Growth ticks run in every connected browser but are divided by the number of colonists online, so the planet's pace is the same for a lone settler and a full crew (and a world with nobody online doesn't grow at all).
 
 **Planet O₂** (HUD `O₂`, starts 0.2%, cap 21%)
 - Each living block adds O₂: canopy 0.0045%, shrub 0.0035%, moss 0.002%, lichen 0.0008%. A grown tree carries ~22 canopy → ~0.1% per tree → **~100 trees for breathable (10%)**.

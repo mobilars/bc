@@ -2212,13 +2212,16 @@ setInterval(()=>{
     spreadWas=spreadOK;
     if(spreadOK&&uiActive()) toast('Warm air, thickening sky — life is spreading on its own');
   }
+  // every client ticks growth, so divide by colonists online: the planet's
+  // pace is the same for a lone settler and a full crew
+  const nOnline=MP.on?MP.players.size+1:1;
   let seeds=2; // planet-wide cap per tick: growth may creep, never cascade
   for(const [k,id] of terraMap){
     const g=GROW[id],sp=SPREAD[id];
     if(!g&&!sp) continue;
     const [x,y,z]=k.split(',').map(Number);
     if(!chunks.has((x>>4)+','+(z>>4))) continue; // only tick loaded ground
-    if(spreadOK&&sp&&seeds>0&&Math.random()<sp*RULES.growth){ // a drifting seed
+    if(spreadOK&&sp&&seeds>0&&Math.random()<sp*RULES.growth/nOnline){ // a drifting seed
       const tx=x+((Math.random()*3)|0)-1, tz=z+((Math.random()*3)|0)-1;
       if(tx!==x||tz!==z){
         let ty=y+1;
@@ -2237,7 +2240,7 @@ setInterval(()=>{
     const lightM=sunlit(x,y,z)?1:.5; // windowless caves grow at half speed
     let tm=pi.enc&&pi.heat?tempMul(pocketTempOf(pi.heat)):tempM;
     if(id===11) tm=Math.max(tm,.3); // lichen is the cold-tolerant pioneer species
-    if(Math.random()<g.p*tm*encM*lightM*RULES.growth){
+    if(Math.random()<g.p*tm*encM*lightM*RULES.growth/nOnline){
       if(g.next) setBlock(x,y,z,g.next);
       else if(!treeNearby(x,y,z)) growTree(x,y,z); // trees need spacing; thickets stall as shrubs
     }
