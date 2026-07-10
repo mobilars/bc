@@ -23,6 +23,8 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 | `F` | toggle flight |
 | `Esc` | pause |
 
+**Touch (tablets/phones):** controls appear automatically on touch devices and work alongside keyboard/mouse. Left joystick moves (analog), dragging the world looks around, and buttons handle jump ⤒ / descend ⤓ (flying), mine ⛏ (hold to keep digging), place ▣, craft C, flight ✈ and pause. Tap a hotbar slot to select it.
+
 Crafting works on the *selected hotbar slot*: select lichen (`7`), and the hint above the hotbar shows the recipe; press `C` to craft, then right-click to place. First goal: mine ice + regolith → craft lichen → plant it.
 
 ### Terraforming

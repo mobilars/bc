@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>PlanetCrafter — terraform a dead world</title>
 <style>
   :root{
@@ -10,9 +10,9 @@
     --gold:#ff9e64; --gold-deep:#7c3018; --bone:#f2ece4; --sage:#a89bb0;
     --mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,monospace;
   }
-  html,body{height:100%;margin:0;overflow:hidden;background:#241318;
+  html,body{height:100%;margin:0;overflow:hidden;background:#241318;overscroll-behavior:none;
     font-family:system-ui,'Segoe UI',sans-serif;color:var(--bone)}
-  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;touch-action:none}
 
   /* ---------- HUD ---------- */
   #cross{position:fixed;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);
@@ -22,7 +22,7 @@
   #cross::after{left:0;top:9px;width:22px;height:4px}
 
   #hotbar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
-    display:none;gap:5px;pointer-events:none}
+    display:none;gap:5px} /* tappable: slots select on click/touch */
   .slot{width:52px;height:52px;border-radius:6px;background:rgba(14,19,15,.72);
     border:2px solid var(--edge);display:flex;align-items:center;justify-content:center;
     position:relative;transition:transform .1s,border-color .1s}
@@ -77,6 +77,27 @@
   #suitpct{min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
   #fade{position:fixed;inset:0;background:#000;opacity:0;transition:opacity .6s;
     pointer-events:none;z-index:10}
+
+  /* ---------- touch controls (shown on coarse pointers; keyboard stays live) ---------- */
+  #touch{position:fixed;inset:0;display:none;pointer-events:none;z-index:6;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  #joy{position:absolute;left:24px;bottom:96px;width:128px;height:128px;border-radius:50%;
+    background:rgba(255,255,255,.07);border:2px solid var(--edge);pointer-events:auto;touch-action:none}
+  #joyk{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;
+    border-radius:50%;background:rgba(255,255,255,.22)}
+  #touch button{pointer-events:auto;touch-action:none;appearance:none;-webkit-appearance:none;
+    border:2px solid var(--edge);background:rgba(14,19,15,.6);color:var(--bone);border-radius:50%;
+    font:700 22px var(--mono);width:64px;height:64px;padding:0;
+    display:flex;align-items:center;justify-content:center}
+  #touch button:active{background:rgba(255,158,100,.35);border-color:var(--gold)}
+  #bJump{position:absolute;right:28px;bottom:120px}
+  #bDown{position:absolute;right:36px;bottom:44px;width:48px;height:48px}
+  #bMine{position:absolute;right:112px;bottom:168px}
+  #bPlace{position:absolute;right:112px;bottom:84px}
+  #bCraft{position:absolute;right:196px;bottom:126px;width:48px;height:48px}
+  #bFly{position:absolute;right:28px;bottom:206px;width:44px;height:44px;font-size:16px}
+  #bPause{position:absolute;left:50%;top:10px;transform:translateX(-50%);
+    width:44px;height:34px;border-radius:8px;font-size:14px}
   @media (prefers-reduced-motion:reduce){#suit.low{animation:none}}
 
   #chat{position:fixed;left:10px;bottom:84px;display:none;flex-direction:column;gap:3px;
@@ -138,6 +159,16 @@
 <canvas id="gl"></canvas>
 <div id="tint"></div>
 <div id="lowair"></div>
+<div id="touch">
+  <div id="joy"><div id="joyk"></div></div>
+  <button id="bMine">⛏</button>
+  <button id="bPlace">▣</button>
+  <button id="bJump">⤒</button>
+  <button id="bDown">⤓</button>
+  <button id="bCraft">C</button>
+  <button id="bFly">✈</button>
+  <button id="bPause">▮▮</button>
+</div>
 <div id="cross"></div>
 <div id="itemname"></div>
 <div id="hotbar"></div>
@@ -594,10 +625,10 @@ function moveAxis(axis,amt){
 }
 const keys={};
 function updatePlayer(dt){
-  const f=(keys.KeyW?1:0)-(keys.KeyS?1:0), r=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+  const f=(keys.KeyW?1:0)-(keys.KeyS?1:0)-joy.y, r=(keys.KeyD?1:0)-(keys.KeyA?1:0)+joy.x;
   const sy=Math.sin(P.yaw),cy=Math.cos(P.yaw);
   let dx=(-sy*f+cy*r), dz=(-cy*f-sy*r);
-  const len=Math.hypot(dx,dz)||1; dx/=len; dz/=len;
+  const len=Math.max(1,Math.hypot(dx,dz)); dx/=len; dz/=len; // <1 keeps analog joystick speed
   const inWater=getBlock(Math.floor(P.x),Math.floor(P.y+.4),Math.floor(P.z))===WATER;
   const tired=isTired()&&!P.fly; // low suit O2: heavy legs, weak jump
   const speed=(P.fly?12:inWater?3:4.4)*(tired?.55:1);
@@ -679,6 +710,8 @@ const hotbarEl=document.getElementById('hotbar'),itemname=document.getElementByI
 const debugEl=document.getElementById('debug'),tint=document.getElementById('tint');
 const crossEl=document.getElementById('cross');
 let locked=false,fallbackMode=false,nameTimer=0;
+// coarse pointer = tablet/phone: show touch controls (keyboard/mouse stay live in parallel)
+let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
 const uiActive=()=>locked||fallbackMode;
 function setHUD(on){
   menu.style.display=on?'none':'flex';
@@ -688,7 +721,8 @@ function setHUD(on){
   document.getElementById('terra').style.display=on?'flex':'none';
   document.getElementById('chat').style.display=on?'flex':'none';
   document.getElementById('suit').style.display=on?'flex':'none';
-  cv.style.cursor=on&&fallbackMode?'none':'';
+  document.getElementById('touch').style.display=on&&touchMode?'block':'none';
+  cv.style.cursor=on&&fallbackMode&&!touchMode?'none':'';
   if(!on&&typeof fetchWorlds==='function') fetchWorlds();
 }
 function pause(){
@@ -705,6 +739,7 @@ HOTBAR.forEach((id,i)=>{
   c.getContext('2d').drawImage(atlas,INFO[id].icon*16,0,16,16,0,0,16,16);
   const cnt=document.createElement('span'); cnt.className='cnt';
   s.appendChild(n); s.appendChild(c); s.appendChild(cnt); hotbarEl.appendChild(s);
+  s.addEventListener('click',()=>{ if(uiActive()) selectSlot(i); }); // tap to select
 });
 function updateSlots(){
   [...hotbarEl.children].forEach((s,k)=>{
@@ -763,7 +798,7 @@ document.getElementById('play').addEventListener('click',()=>{
     location.search='?world='+encodeURIComponent(wv);
     return;
   }
-  if(!cv.requestPointerLock) return startFallback();
+  if(touchMode||!cv.requestPointerLock) return startFallback(); // no pointer lock on tablets
   try{
     const r=cv.requestPointerLock();
     if(r&&r.catch) r.catch(startFallback);
@@ -786,11 +821,11 @@ document.addEventListener('mousemove',e=>{
   P.yaw-=e.movementX*.0024;
   P.pitch=Math.max(-1.55,Math.min(1.55,P.pitch-e.movementY*.0024));
 });
-document.addEventListener('mousedown',e=>{
+function act(btn){ // 0 = mine, 2 = place; shared by mouse buttons and touch buttons
   if(!uiActive()||chatOpen) return;
   if(isTired()){ toast('Too exhausted to build — find air'); sfx(90); return; }
   const hit=raycast(6);
-  if(e.button===0&&hit){
+  if(btn===0&&hit){
     if(hit.y<=0) return; // bedrock floor
     setBlock(hit.x,hit.y,hit.z,0);
     if(!creative){
@@ -798,7 +833,7 @@ document.addEventListener('mousedown',e=>{
       if(d){ inv[d]=(inv[d]||0)+1; saveDirty=true; updateSlots(); }
     }
     sfx(150,55,.1,'square');
-  }else if(e.button===2&&hit&&hit.prev){
+  }else if(btn===2&&hit&&hit.prev){
     const [px_,py_,pz_]=hit.prev;
     const cur=getBlock(px_,py_,pz_);
     if((cur===0||cur===WATER)&&cellFree(px_,py_,pz_)){
@@ -815,6 +850,10 @@ document.addEventListener('mousedown',e=>{
       sfx(300,460,.07,'square');
     }
   }
+}
+document.addEventListener('mousedown',e=>{
+  if(!locked&&e.target!==cv) return; // unlocked clicks on UI (hotbar taps) aren't world actions
+  act(e.button);
 });
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('keydown',e=>{
@@ -852,6 +891,68 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.addEventListener('wheel',e=>{ if(uiActive()) selectSlot(P.sel+(e.deltaY>0?1:-1)); });
+
+/* ================= touch controls ================= */
+// Parallel to keyboard/mouse: left thumb joystick to move, right thumb drags to
+// look, buttons share act()/craft()/keys with the keyboard. Auto-shown on coarse
+// pointers; a first touch on any hybrid device turns them on too.
+const joy={x:0,y:0,id:null};
+const joyEl=document.getElementById('joy'),joykEl=document.getElementById('joyk');
+addEventListener('touchstart',()=>{
+  if(!touchMode){ touchMode=true; if(uiActive()) document.getElementById('touch').style.display='block'; }
+},{passive:true});
+function joyFrom(t){
+  const r=joyEl.getBoundingClientRect(),max=r.width/2-8;
+  let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2);
+  const m=Math.hypot(dx,dy);
+  if(m>max){ dx*=max/m; dy*=max/m; }
+  joy.x=dx/max; joy.y=dy/max;
+  joykEl.style.transform='translate('+dx+'px,'+dy+'px)';
+}
+joyEl.addEventListener('touchstart',e=>{
+  e.preventDefault(); const t=e.changedTouches[0]; joy.id=t.identifier; joyFrom(t);
+},{passive:false});
+joyEl.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches) if(t.identifier===joy.id) joyFrom(t);
+},{passive:false});
+const joyEnd=e=>{
+  for(const t of e.changedTouches)
+    if(t.identifier===joy.id){ joy.id=null; joy.x=joy.y=0; joykEl.style.transform=''; }
+};
+joyEl.addEventListener('touchend',joyEnd); joyEl.addEventListener('touchcancel',joyEnd);
+let lookId=null,lookX=0,lookY=0; // one finger on the world steers the camera
+cv.addEventListener('touchstart',e=>{
+  e.preventDefault(); if(!uiActive()) return;
+  if(lookId===null){ const t=e.changedTouches[0]; lookId=t.identifier; lookX=t.clientX; lookY=t.clientY; }
+},{passive:false});
+cv.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier!==lookId) continue;
+    P.yaw-=(t.clientX-lookX)*.005;
+    P.pitch=Math.max(-1.55,Math.min(1.55,P.pitch-(t.clientY-lookY)*.005));
+    lookX=t.clientX; lookY=t.clientY;
+  }
+},{passive:false});
+const lookEnd=e=>{ for(const t of e.changedTouches) if(t.identifier===lookId) lookId=null; };
+cv.addEventListener('touchend',lookEnd); cv.addEventListener('touchcancel',lookEnd);
+function bindBtn(id,down,up){
+  const el=document.getElementById(id);
+  el.addEventListener('touchstart',e=>{ e.preventDefault(); down(); },{passive:false});
+  if(up){
+    el.addEventListener('touchend',e=>{ e.preventDefault(); up(); },{passive:false});
+    el.addEventListener('touchcancel',up);
+  }
+}
+let mineT=null;
+bindBtn('bJump',()=>{ keys.Space=true; },()=>{ keys.Space=false; });
+bindBtn('bDown',()=>{ keys.ShiftLeft=true; },()=>{ keys.ShiftLeft=false; }); // descend while flying
+bindBtn('bMine',()=>{ act(0); mineT=setInterval(()=>act(0),270); },()=>{ clearInterval(mineT); mineT=null; });
+bindBtn('bPlace',()=>act(2));
+bindBtn('bCraft',()=>craft());
+bindBtn('bFly',()=>{ P.fly=!P.fly; P.vy=0; sfx(P.fly?500:260); toast(P.fly?'Flying — ⤒ up, ⤓ down':'Walking'); });
+bindBtn('bPause',()=>pause());
 
 /* ================= multiplayer ================= */
 const WORLD=(new URLSearchParams(location.search).get('world')||'outpost-1').slice(0,32)||'outpost-1';
