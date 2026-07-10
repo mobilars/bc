@@ -50,7 +50,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 **Air pockets** — a flood-fill from the air block above a plant (or from your head). Sealed = the flood neither reaches the sky nor exceeds **~800 air blocks**. One gap breaks the seal. Anything solid seals — including:
 - **Air vents** (2 timber + 1 glass → 2): airtight but walk-through. A vented doorway keeps the pocket pressurized with no airlock dance.
 - **Glass**: seals air *and* passes light — the greenhouse block.
-- Standing in a sealed pocket the HUD shows its concentrated stats: pocket O₂ = planet O₂ + **0.1% per plant block with air above it** (cap 24%) → **~a dozen trees make a pocket breathable**; pocket temp = planet temp + 6°C per heater.
+- Standing in a sealed pocket the HUD shows a teal **● sealed pocket** badge plus its concentrated stats: pocket O₂ = planet O₂ + **0.1% per plant block with air above it** (cap 24%) → **~a dozen trees make a pocket breathable**; pocket temp = planet temp + 6°C per heater. Sealing or breaking a pocket announces itself with a toast and a chirp the moment it happens.
 
 **Suit O₂** (gauge bottom-right; drains only when the local air is unbreathable)
 - Drain: **~8 minutes per tank** in dead air; much faster underwater. Refill: **lander** (fast), sealed pocket at ≥10% O₂ (slow), breathable planet air (trickle).

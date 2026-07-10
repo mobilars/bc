@@ -62,6 +62,7 @@
   #terra b{color:var(--gold);font-weight:700}
   #terra .stg{color:var(--gold);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
   #terra .goal{color:var(--sage)}
+  #terra .pkt{color:#6fd3c3;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
 
   #suit{position:fixed;right:12px;bottom:14px;display:none;align-items:center;gap:8px;
     font:600 11px var(--mono);color:var(--bone);background:rgba(20,12,22,.62);
@@ -1202,6 +1203,7 @@ function updateTerraHUD(){
   terraEl.textContent='';
   const add=(cls,html)=>{ const s=document.createElement('span'); if(cls)s.className=cls; s.innerHTML=html; terraEl.appendChild(s); };
   add('stg',stageName());
+  if(STATS.sheltered) add('pkt','● sealed pocket'); // you'd never guess otherwise
   add('','O₂ <b>'+STATS.o2.toFixed(2)+'%</b>'+
     (STATS.sheltered?' · pocket <b>'+STATS.pocket.toFixed(1)+'%</b>':''));
   add('','temp <b>'+STATS.temp.toFixed(1)+'°C</b>'+
@@ -1209,9 +1211,7 @@ function updateTerraHUD(){
   add('','plants <b>'+STATS.plants+'</b>');
   add('goal','→ '+nextGoal());
 }
-let tickN=0;
 setInterval(()=>{
-  tickN++;
   // colder than -5°C nothing but lichen really grows; above it, warmth accelerates
   const tempMul=t=>t<-5?.03:Math.min(2.2,.7+(t+5)/22);
   const tempM=tempMul(STATS.temp);
@@ -1229,7 +1229,8 @@ setInterval(()=>{
     }
   }
   computeStats(false);
-  if(tickN%2===0){ // sheltered spaces concentrate the O2 of the plants inside
+  { // sheltered spaces concentrate the O2 of the plants inside
+    const was=STATS.sheltered;
     const hx=Math.floor(P.x),hy=Math.floor(P.y+EYE),hz=Math.floor(P.z);
     const vol=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,800):null;
     if(vol){
@@ -1244,6 +1245,10 @@ setInterval(()=>{
       STATS.pocket=Math.min(24,STATS.o2+n*.1);
       STATS.pocketTemp=pocketTempOf(h);
     }else{ STATS.sheltered=false; STATS.pocket=STATS.o2; STATS.pocketTemp=STATS.temp; }
+    if(STATS.sheltered!==was&&uiActive()){ // teach the seal the moment it changes
+      if(STATS.sheltered){ toast('Pocket sealed — '+STATS.pocket.toFixed(1)+'% O₂ inside'); beep(760,.12); }
+      else{ toast('Pocket open — air leaks to the sky'); beep(300,.16); }
+    }
   }
   updateTerraHUD();
 },1000);
