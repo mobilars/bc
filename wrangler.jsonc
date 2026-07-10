@@ -1,7 +1,14 @@
 {
-  "name": "blockcraft",
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bc",
   "compatibility_date": "2026-07-10",
+  "observability": {
+    "enabled": true
+  },
   "assets": {
-    "directory": "./public"
-  }
+    "directory": "."
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
 }
