@@ -303,7 +303,7 @@ try{
   }
 }catch(e){}
 function playerState(){
-  return {x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel,tank:suitO2};
+  return {x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel,tank:suitO2,jet:flyT};
 }
 function saveNow(){
   try{
@@ -715,27 +715,30 @@ function moveAxis(axis,amt){
   }
 }
 const keys={};
-// Flight is jetpack-powered: craft one (E), and it burns 1 plutonium to light
-// plus 1 per FLY_SEC seconds aloft. Creative mode flies free.
+// Flight is jetpack-powered: craft one (E). Each plutonium buys FLY_SEC seconds
+// of burn, metered only while airborne — unused fuel keeps across flights and
+// saves. Creative mode flies free.
 const FLY_SEC=12;
-let flyT=0;
+let flyT=savedPlayer&&typeof savedPlayer.jet==='number'?Math.max(0,savedPlayer.jet):0;
 function toggleFly(){
   if(!P.fly&&!creative){
     if(!(inv[JETPACK]>0)) return toast('Flight needs a jetpack — craft one in the inventory (E)');
-    if(!(inv[PLUT]>0)) return toast('Jetpack is dry — it burns plutonium');
+    if(!(inv[PLUT]>0)&&flyT<=0) return toast('Jetpack is dry — it burns plutonium');
   }
   P.fly=!P.fly; P.vy=0; sfx(P.fly?500:260,P.fly?700:180,.08,'triangle');
-  if(P.fly&&!creative) toast('Jetpack lit — 1 plutonium per '+FLY_SEC+'s'+(touchMode?' · ⤒ up ⤓ down':''));
+  if(P.fly&&!creative)
+    toast(flyT>0?'Jetpack lit — '+Math.ceil(flyT)+'s of fuel in the tank'
+      :'Jetpack lit — '+FLY_SEC+'s per plutonium'+(touchMode?' · ⤒ up ⤓ down':''));
 }
 function burnFlight(dt){
-  if(!P.fly||creative){ flyT=0; return; }
+  if(!P.fly||creative) return; // grounded: whatever is in the tank stays there
   flyT-=dt;
   if(flyT>0) return;
   if((inv[JETPACK]||0)>0&&(inv[PLUT]||0)>0){
-    inv[PLUT]--; flyT=FLY_SEC; saveDirty=true; updateSlots();
+    inv[PLUT]--; flyT+=FLY_SEC; saveDirty=true; updateSlots();
     if(!(inv[PLUT]>0)) toast('Jetpack: burning the last plutonium');
   }else{
-    P.fly=false; P.vy=0;
+    P.fly=false; P.vy=0; flyT=0;
     toast((inv[JETPACK]||0)>0?'Jetpack dry — out of plutonium':'No jetpack');
   }
 }
@@ -1086,7 +1089,7 @@ const GUIDE=[ // [id, what it does] — drives the help page; icons come from th
   [17,'A den that hatches a grazer. Needs >0°C and breathable air.'],
   [18,'Shines the lander-gold locator beam. Mark your outposts.'],
   [19,'Radioactive ore in the deep dark (below y≈12). Fuels heaters, jetpacks and the starship.'],
-  [20,'Personal thrusters (F / ✈). Burns 1 plutonium to light and 1 per 12s aloft.'],
+  [20,'Personal thrusters (F / ✈). 12s of flight per plutonium — unused fuel keeps.'],
 ];
 const HOLDABLE=[1,2,3,4,5,7,8,9,11,14,16,17,18,19,20]; // what can sit in your pack
 const invEl=document.getElementById('inv'),invListEl=document.getElementById('invlist');
@@ -1648,6 +1651,7 @@ function resetWorld(){ // the server's seed replaced ours: regenerate everything
   }
   if(s&&validHotbar(s.hotbar)){ HOTBAR=s.hotbar.slice(); buildHotbar(); }
   if(s&&s.player&&typeof s.player.tank==='number') suitO2=s.player.tank;
+  flyT=s&&s.player&&typeof s.player.jet==='number'?Math.max(0,s.player.jet):0;
   P.vy=0; selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
   const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
   for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++) genChunk(pcx+dx,pcz+dz);
@@ -2264,7 +2268,7 @@ function frame(t){
     }
     const ldx=8.5-P.x,ldz=8.5-P.z,ldist=Math.round(Math.hypot(ldx,ldz));
     const lb=Math.round(((Math.atan2(ldx,-ldz)*180/Math.PI+360)%360)/45)%8;
-    debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+(creative?'  ◆ creative':'')+
+    debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying'+(creative?'':' '+Math.ceil(Math.max(0,flyT))+'s'):'')+(creative?'  ◆ creative':'')+
       '\nx '+P.x.toFixed(1)+'  y '+P.y.toFixed(1)+'  z '+P.z.toFixed(1)+
       '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8]+
       '\n⌂ lander '+(ldist<7?'here — O₂ refill · starship: '+(touchMode?'🚀 in ▤':'press L')

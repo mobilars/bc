@@ -77,7 +77,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **The flight is flown, not skipped**: an asteroid-and-pirate lane run. Steer with WASD/arrows (or drag on touch); your cannon fires automatically. Asteroids take hits by size, pirate daggers strafe and shoot aimed bolts, and the spawn rate climbs all the way. Kills pay **salvage on the spot** (+1¢ per rock, +5¢ per pirate). Your hull takes 3 hits — **lose it and the escape pod dumps you back at the colony, fuel gone**. `Esc` turns back early (fuel still spent).
 
-**Jetpack** — you can't fly on the colony until you craft one (**4 timber + 2 glass + 2 plutonium**, via the inventory since it has no hotbar slot). `F` / ✈ toggles it; it burns **1 plutonium to light and 1 per 12 seconds aloft**, and shuts off dry. Creative mode still flies free.
+**Jetpack** — you can't fly on the colony until you craft one (**4 timber + 2 glass + 2 plutonium**, via the inventory since it has no hotbar slot). `F` / ✈ toggles it. Each plutonium buys **12 seconds of burn, metered only while airborne** — land with fuel in the tank and it's still there next flight (it even survives saves; the readout top-left shows seconds left). The pack shuts off dry. Creative mode still flies free.
 
 **Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium start off the hotbar as crafting ingredients — press `E` to see them, and assign them to a slot from there if you want to place them.)
 
