@@ -78,6 +78,34 @@
   #fade{position:fixed;inset:0;background:#000;opacity:0;transition:opacity .6s;
     pointer-events:none;z-index:10}
 
+  /* ---------- inventory & field guide panels ---------- */
+  #inv,#help{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;
+    display:none;flex-direction:column;width:min(92vw,560px);max-height:min(80vh,660px);
+    background:var(--panel);border:1px solid var(--edge);border-radius:12px;overflow:hidden}
+  .phead{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+    font:700 13px var(--mono);text-transform:uppercase;letter-spacing:.14em;color:var(--gold);
+    border-bottom:1px solid var(--edge)}
+  .pbtns{display:flex;gap:8px}
+  .phead button{appearance:none;border:1px solid var(--edge);background:rgba(255,255,255,.06);
+    color:var(--bone);border-radius:6px;font:600 11px var(--mono);padding:5px 10px;cursor:pointer}
+  .phead button:hover{border-color:var(--gold)}
+  #invlist,#helplist{overflow-y:auto;padding:8px 10px}
+  .irow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px}
+  .irow:nth-child(odd),.hrow:nth-child(odd){background:rgba(255,255,255,.03)}
+  .irow canvas{width:32px;height:32px;image-rendering:pixelated;border-radius:4px;flex:none}
+  .irow .iname{font:600 13px var(--mono);min-width:112px}
+  .irow .icnt{margin-left:auto;font:700 13px var(--mono);color:var(--gold);min-width:34px;text-align:right}
+  .irow.none{opacity:.45}
+  .craftb{appearance:none;border:1px solid var(--edge);background:rgba(255,158,100,.12);
+    color:var(--bone);border-radius:6px;font:600 11px var(--mono);padding:5px 9px;cursor:pointer}
+  .craftb:hover:not(:disabled){border-color:var(--gold)}
+  .craftb:disabled{opacity:.4;cursor:default}
+  .hrow{display:flex;gap:12px;padding:9px 8px;border-radius:6px;align-items:flex-start}
+  .hrow canvas{width:36px;height:36px;image-rendering:pixelated;border-radius:4px;flex:none;margin-top:2px}
+  .hrow .hname{font:700 13px var(--mono)}
+  .hrow .hcraft{font:600 11px var(--mono);color:var(--gold);margin-left:8px}
+  .hrow .hdesc{font:12px/1.5 system-ui;color:var(--sage);margin-top:2px}
+
   /* ---------- touch controls (shown on coarse pointers; keyboard stays live) ---------- */
   #touch{position:fixed;inset:0;display:none;pointer-events:none;z-index:6;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -98,6 +126,8 @@
   #bFly{position:absolute;right:28px;bottom:206px;width:44px;height:44px;font-size:16px}
   #bPause{position:absolute;left:50%;top:10px;transform:translateX(-50%);
     width:44px;height:34px;border-radius:8px;font-size:14px}
+  #bInv{position:absolute;left:calc(50% + 300px);bottom:16px;width:48px;height:48px;
+    border-radius:10px;font-size:18px}
   @media (prefers-reduced-motion:reduce){#suit.low{animation:none}}
 
   #chat{position:fixed;left:10px;bottom:84px;display:none;flex-direction:column;gap:3px;
@@ -168,6 +198,19 @@
   <button id="bCraft">C</button>
   <button id="bFly">✈</button>
   <button id="bPause">▮▮</button>
+  <button id="bInv">▤</button>
+</div>
+<div id="inv">
+  <div class="phead">Inventory
+    <span class="pbtns"><button id="invhelp">? guide</button><button id="invclose">✕</button></span>
+  </div>
+  <div id="invlist"></div>
+</div>
+<div id="help">
+  <div class="phead">Field Guide
+    <span class="pbtns"><button id="helpclose">✕</button></span>
+  </div>
+  <div id="helplist"></div>
 </div>
 <div id="cross"></div>
 <div id="itemname"></div>
@@ -191,6 +234,8 @@
       <kbd>Left click</kbd><span>break block</span>
       <kbd>Right click</kbd><span>place block</span>
       <kbd>1–0 · wheel</kbd><span>pick block</span>
+      <kbd>E</kbd><span>inventory + crafting</span>
+      <kbd>H</kbd><span>field guide</span>
       <kbd>F</kbd><span>toggle flight</span>
       <kbd>C</kbd><span>craft selected</span>
       <kbd>T</kbd><span>chat</span>
@@ -204,9 +249,10 @@
     <div id="worlds"></div>
     <div id="btns">
       <button id="play">▶ Explore</button>
+      <button id="menuhelp" class="ghost">📖 Field guide</button>
       <button id="newworld" class="ghost">☄ New planet</button>
     </div>
-    <p id="touchwarn">This game needs a mouse and keyboard — touch isn't supported.</p>
+    <p id="touchwarn">Touch controls on: joystick to move, drag to look, ⛏/▣ to mine and build.</p>
     <p id="err"></p>
     <div id="foot"><span id="seedlbl"></span><span>your world auto-saves in this browser</span></div>
   </div>
@@ -273,8 +319,8 @@ function landerY(){ return Math.max(heightAt(8,8),SEA+1); } // spawn pad height
 // ids: 1 regolith 2 rock 3 basalt 4 ice 5 alien trunk 6 canopy 7 timber
 //      8 cut rock 9 glass 10 water 11 lichen 12 moss 13 shrub 14 heater 15 verdant regolith
 //      16 air vent (walk-through membrane that keeps O2 in) 17 grazer nest (spawns a critter)
-//      18 beacon (shines a lander-gold locator beam)
-const WATER=10, GLASS=9, VENT=16, NEST=17, BEACON=18;
+//      18 beacon (shines a lander-gold locator beam) 19 plutonium ore (deep; fuels heaters)
+const WATER=10, GLASS=9, VENT=16, NEST=17, BEACON=18, PLUT=19;
 const INFO={
   1:{n:'Regolith',t:0, s:1, b:1, icon:0},
   2:{n:'Rock',    t:2, s:2, b:2, icon:2},
@@ -294,12 +340,13 @@ const INFO={
   16:{n:'Air Vent',t:20,s:20,b:20,icon:20}, // blocks airflow, not people
   17:{n:'Grazer',t:21,s:21,b:21,icon:21},   // placing the den spawns the animal
   18:{n:'Beacon',t:22,s:22,b:22,icon:22},   // same gold beam as the lander's
+  19:{n:'Plutonium Ore',t:23,s:23,b:23,icon:23}, // deep-rock ore; heater fuel
 };
 const isOpaque=id=>id!==0&&id!==GLASS&&id!==WATER&&id!==VENT;
 const isSolid=id=>id!==0&&id!==WATER&&id!==VENT; // vents are walk-through
 const HOTBAR=[1,2,8,7,9,18,11,14,17,16]; // basalt and ice live in inventory only (ingredients)
 // what mining a block yields (0 = nothing; plants regress to lichen)
-const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18};
+const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18,19:19};
 
 const atlas=document.createElement('canvas'); atlas.width=512; atlas.height=16;
 const ac=atlas.getContext('2d');
@@ -359,6 +406,9 @@ function buildAtlas(){
   tileNoise(17,[196,90,70],14);                       // suit colors
   tileNoise(18,[86,120,196],14);
   tileNoise(19,[198,162,86],14);
+  tileNoise(23,[56,60,56],14);                        // plutonium ore: green-glow flecks
+  for(let k=0;k<9;k++) px(23,rnd16(),rnd16(),'rgb(118,236,108)');
+  for(let k=0;k<4;k++) px(23,rnd16(),rnd16(),'rgb(196,255,176)');
   tileNoise(22,[238,198,112],16);                     // beacon: sun-warm lamp
   ac.fillStyle='rgb(255,246,208)'; ac.fillRect(22*16+5,5,6,6);
   for(const [bx,by] of [[1,1],[14,1],[1,14],[14,14]]) px(22,bx,by,'rgb(122,92,58)');
@@ -524,6 +574,7 @@ function genChunk(cx,cz){
       let id = y===0?3 : y<h-6?3 : y<h-1?2 : 1;
       if(y===h&&!lake&&verdant&&hash2(wx*5+1,wz*5+9)<.6) id=15;
       if(y>2&&y<h-3&&hash3(wx,y*3,wz)<.012) id=4; // buried ice veins
+      if(y>1&&y<12&&hash3(wx*3+5,y*7+1,wz*3+9)<.02) id=PLUT; // plutonium: deep dark only
       put(lx,y,lz,id);
     }
     for(let y=h+1;y<=SEA;y++) put(lx,y,lz, melted?WATER:4); // frozen or liquid lakes
@@ -712,7 +763,9 @@ const crossEl=document.getElementById('cross');
 let locked=false,fallbackMode=false,nameTimer=0;
 // coarse pointer = tablet/phone: show touch controls (keyboard/mouse stay live in parallel)
 let touchMode=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
+let invOpen=false,helpOpen=false,relock=false; // relock: pointer lock lent to a panel
 const uiActive=()=>locked||fallbackMode;
+const panelOpen=()=>invOpen||helpOpen;
 function setHUD(on){
   menu.style.display=on?'none':'flex';
   crossEl.style.display=on?'block':'none';
@@ -723,6 +776,7 @@ function setHUD(on){
   document.getElementById('suit').style.display=on?'flex':'none';
   document.getElementById('touch').style.display=on&&touchMode?'block':'none';
   cv.style.cursor=on&&fallbackMode&&!touchMode?'none':'';
+  if(!on) closePanels();
   if(!on&&typeof fetchWorlds==='function') fetchWorlds();
 }
 function pause(){
@@ -747,6 +801,7 @@ function updateSlots(){
     s.querySelector('.cnt').textContent=creative?'∞':(have||'');
     s.classList.toggle('empty',!creative&&!have);
   });
+  if(invOpen) renderInv(); // keep the open inventory live
 }
 function toast(msg){
   itemname.textContent=msg; itemname.style.opacity=1;
@@ -755,7 +810,7 @@ function toast(msg){
 // blocks that don't occur naturally are crafted from ones that do
 const CRAFT={
   11:{cost:[[4,1],[1,1]],n:2},  // lichen: cultured from ice + regolith
-  14:{cost:[[2,2],[3,1]],n:1},  // heater: rock shell around a basalt core
+  14:{cost:[[2,2],[19,1]],n:1}, // heater: rock casing around a plutonium core
   9:{cost:[[1,2]],n:1},         // glass: fused regolith silica
   8:{cost:[[2,1]],n:1},
   7:{cost:[[5,1]],n:4},         // timber: milled alien trunk
@@ -764,8 +819,8 @@ const CRAFT={
   18:{cost:[[9,2],[3,1]],n:1},  // beacon: glass lens over a hot basalt core
 };
 const costText=r=>r.cost.map(c=>c[1]+' '+INFO[c[0]].n.toLowerCase()).join(' + ');
-function craft(){
-  const id=HOTBAR[P.sel], r=CRAFT[id];
+function craftId(id){
+  const r=CRAFT[id];
   if(creative) return toast('Creative mode — everything is free');
   if(!r) return toast(INFO[id].n+' is mined, not crafted');
   if(id===NEST&&!(STATS.temp>0&&STATS.o2>=10)) // life needs a living world
@@ -777,6 +832,7 @@ function craft(){
   toast('Crafted '+r.n+' '+INFO[id].n.toLowerCase());
   sfx(520,760,.08,'triangle');
 }
+function craft(){ craftId(HOTBAR[P.sel]); }
 function selectSlot(i){
   P.sel=(i+HOTBAR.length)%HOTBAR.length;
   [...hotbarEl.children].forEach((s,k)=>s.classList.toggle('sel',k===P.sel));
@@ -813,16 +869,17 @@ document.getElementById('newworld').addEventListener('click',()=>{
 document.addEventListener('pointerlockchange',()=>{
   locked=document.pointerLockElement===cv;
   if(locked) fallbackMode=false;
+  if(!locked&&relock) return; // a panel borrowed the cursor — don't drop to the menu
   setHUD(locked);
   if(!uiActive()){ tagline.textContent='Paused — your colony is saved. Click Explore to continue.'; saveNow(); }
 });
 document.addEventListener('mousemove',e=>{
-  if(!uiActive()) return;
+  if(!uiActive()||panelOpen()) return;
   P.yaw-=e.movementX*.0024;
   P.pitch=Math.max(-1.55,Math.min(1.55,P.pitch-e.movementY*.0024));
 });
 function act(btn){ // 0 = mine, 2 = place; shared by mouse buttons and touch buttons
-  if(!uiActive()||chatOpen) return;
+  if(!uiActive()||chatOpen||panelOpen()) return;
   if(isTired()){ toast('Too exhausted to build — find air'); sfx(90); return; }
   const hit=raycast(6);
   if(btn===0&&hit){
@@ -869,8 +926,13 @@ document.addEventListener('keydown',e=>{
     }
     e.preventDefault(); return;
   }
+  if(panelOpen()&&(e.code==='KeyE'||e.code==='KeyH'||e.code==='Escape')){
+    showPanel(null); e.preventDefault(); return;
+  }
   keys[e.code]=true;
   if(!uiActive()) return;
+  if(e.code==='KeyE') return showPanel('inv');
+  if(e.code==='KeyH') return showPanel('help');
   if(e.code==='KeyT'||e.code==='Enter'){
     if(MP.on){
       for(const k in keys) keys[k]=false; // stop walking while typing
@@ -891,6 +953,102 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.addEventListener('wheel',e=>{ if(uiActive()) selectSlot(P.sel+(e.deltaY>0?1:-1)); });
+
+/* ================= inventory & field guide ================= */
+const GUIDE=[ // [id, what it does] — drives the help page; icons come from the atlas
+  [1,'Rusty ground dust. The basic building block; fuses into glass.'],
+  [2,'Sturdy stone. Solid walls and heater casings.'],
+  [3,'Dark volcanic stone. Focused into beacon lenses.'],
+  [4,'Buried frozen water — look for pale veins. Cultures lichen.'],
+  [5,'Alien tree trunk. Mills into 4 timber.'],
+  [6,'Tree canopy. Every leaf block feeds the atmosphere O₂.'],
+  [7,'Milled plank. Builds, and laces into air vents.'],
+  [8,'Dressed stone for tidy builds — the lander pad is made of it.'],
+  [9,'Fused silica. Seals air AND passes sunlight: greenhouse roofs.'],
+  [10,'Meltwater. Appears once the planet passes 0°C.'],
+  [11,'The pioneer plant. Survives any cold; grows moss → shrub → tree.'],
+  [12,'Second growth stage. Wants warmth (> −5°C) to keep going.'],
+  [13,'Nearly a tree. Heat and shelter hurry it along.'],
+  [14,'Nuclear pocket-warmer: +3°C planet-wide, +6°C in a sealed pocket.'],
+  [15,'Living ground — appears when the world hits 12% O₂ and 5°C.'],
+  [16,'Airtight membrane you can walk through. A door for sealed caves.'],
+  [17,'A den that hatches a grazer. Needs >0°C and breathable air.'],
+  [18,'Shines the lander-gold locator beam. Mark your outposts.'],
+  [19,'Radioactive ore in the deep dark (below y≈12). Fuels heaters.'],
+];
+const HOLDABLE=[1,2,3,4,5,7,8,9,11,14,16,17,18,19]; // what can sit in your pack
+const invEl=document.getElementById('inv'),invListEl=document.getElementById('invlist');
+const helpEl=document.getElementById('help'),helpListEl=document.getElementById('helplist');
+function iconCanvas(id){
+  const c=document.createElement('canvas'); c.width=16; c.height=16;
+  c.getContext('2d').drawImage(atlas,INFO[id].icon*16,0,16,16,0,0,16,16);
+  return c;
+}
+function renderInv(){
+  invListEl.textContent='';
+  for(const id of HOLDABLE){
+    const have=inv[id]||0;
+    const row=document.createElement('div'); row.className='irow'+(have||creative?'':' none');
+    row.appendChild(iconCanvas(id));
+    const nm=document.createElement('span'); nm.className='iname'; nm.textContent=INFO[id].n;
+    row.appendChild(nm);
+    const r=CRAFT[id];
+    if(r){
+      const b=document.createElement('button'); b.className='craftb';
+      b.textContent='craft'+(r.n>1?' ×'+r.n:'')+' · '+costText(r);
+      b.disabled=!creative&&r.cost.some(([cid,q])=>(inv[cid]||0)<q);
+      b.addEventListener('click',()=>craftId(id));
+      row.appendChild(b);
+    }
+    const cnt=document.createElement('span'); cnt.className='icnt';
+    cnt.textContent=creative?'∞':have;
+    row.appendChild(cnt);
+    invListEl.appendChild(row);
+  }
+}
+let helpBuilt=false;
+function renderHelp(){
+  if(helpBuilt) return; helpBuilt=true;
+  for(const [id,txt] of GUIDE){
+    const row=document.createElement('div'); row.className='hrow';
+    row.appendChild(iconCanvas(id));
+    const col=document.createElement('div');
+    const nm=document.createElement('span'); nm.className='hname'; nm.textContent=INFO[id].n;
+    col.appendChild(nm);
+    const r=CRAFT[id];
+    const how=document.createElement('span'); how.className='hcraft';
+    how.textContent=r?'craft: '+costText(r)+(r.n>1?' → '+r.n:'')
+      :id===PLUT?'mine it deep underground'
+      :id===10||id===15?'appears as the planet changes':'mine it';
+    col.appendChild(how);
+    const d=document.createElement('div'); d.className='hdesc'; d.textContent=txt;
+    col.appendChild(d);
+    row.appendChild(col);
+    helpListEl.appendChild(row);
+  }
+}
+function closePanels(){ // hard hide, no pointer-lock juggling (used when HUD drops)
+  invOpen=helpOpen=false; relock=false;
+  invEl.style.display='none'; helpEl.style.display='none';
+}
+function showPanel(which){ // 'inv' | 'help' | null — handles the pointer-lock handoff
+  const wasOpen=panelOpen();
+  invOpen=which==='inv'; helpOpen=which==='help';
+  invEl.style.display=invOpen?'flex':'none';
+  helpEl.style.display=helpOpen?'flex':'none';
+  if(invOpen) renderInv();
+  if(helpOpen) renderHelp();
+  if(panelOpen()&&locked){ relock=true; document.exitPointerLock(); }
+  else if(!panelOpen()&&wasOpen&&relock){
+    relock=false;
+    try{ const r=cv.requestPointerLock(); if(r&&r.catch) r.catch(startFallback); }
+    catch(e){ startFallback(); }
+  }
+}
+document.getElementById('invclose').addEventListener('click',()=>showPanel(null));
+document.getElementById('helpclose').addEventListener('click',()=>showPanel(null));
+document.getElementById('invhelp').addEventListener('click',()=>showPanel('help'));
+document.getElementById('menuhelp').addEventListener('click',()=>showPanel('help'));
 
 /* ================= touch controls ================= */
 // Parallel to keyboard/mouse: left thumb joystick to move, right thumb drags to
@@ -923,7 +1081,7 @@ const joyEnd=e=>{
 joyEl.addEventListener('touchend',joyEnd); joyEl.addEventListener('touchcancel',joyEnd);
 let lookId=null,lookX=0,lookY=0; // one finger on the world steers the camera
 cv.addEventListener('touchstart',e=>{
-  e.preventDefault(); if(!uiActive()) return;
+  e.preventDefault(); if(!uiActive()||panelOpen()) return;
   if(lookId===null){ const t=e.changedTouches[0]; lookId=t.identifier; lookX=t.clientX; lookY=t.clientY; }
 },{passive:false});
 cv.addEventListener('touchmove',e=>{
@@ -953,6 +1111,7 @@ bindBtn('bPlace',()=>act(2));
 bindBtn('bCraft',()=>craft());
 bindBtn('bFly',()=>{ P.fly=!P.fly; P.vy=0; sfx(P.fly?500:260); toast(P.fly?'Flying — ⤒ up, ⤓ down':'Walking'); });
 bindBtn('bPause',()=>pause());
+bindBtn('bInv',()=>showPanel(invOpen?null:'inv'));
 
 /* ================= multiplayer ================= */
 const WORLD=(new URLSearchParams(location.search).get('world')||'outpost-1').slice(0,32)||'outpost-1';

@@ -69,7 +69,7 @@ export class World {
     } else if (m.t === 'set'
         && [m.x, m.y, m.z, m.id].every(Number.isInteger)
         // max id must track the block table (INFO) in public/index.html
-        && m.y >= 0 && m.y < 64 && m.id >= 0 && m.id <= 18
+        && m.y >= 0 && m.y < 64 && m.id >= 0 && m.id <= 19
         && Math.abs(m.x) < 1e7 && Math.abs(m.z) < 1e7) {
       await this.ctx.storage.put('e:' + m.x + ',' + m.y + ',' + m.z, m.id);
       this.editCount = (this.editCount || 0) + 1;

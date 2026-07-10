@@ -17,13 +17,17 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 | `W A S D` / Mouse / `Space` | move, look, jump/swim |
 | Left / right click | mine (collects the block) / place |
 | `1`–`0` or scroll wheel | pick block |
+| `E` | inventory — all your items, with crafting |
+| `H` | field guide — what every block looks like, does, and costs |
 | `C` | craft the selected block |
 | `T` or `Enter` | chat (multiplayer) |
 | `G` | creative mode (infinite blocks) |
 | `F` | toggle flight |
 | `Esc` | pause |
 
-**Touch (tablets/phones):** controls appear automatically on touch devices and work alongside keyboard/mouse. Left joystick moves (analog), dragging the world looks around, and buttons handle jump ⤒ / descend ⤓ (flying), mine ⛏ (hold to keep digging), place ▣, craft C, flight ✈ and pause. Tap a hotbar slot to select it.
+**Touch (tablets/phones):** controls appear automatically on touch devices and work alongside keyboard/mouse. Left joystick moves (analog), dragging the world looks around, and buttons handle jump ⤒ / descend ⤓ (flying), mine ⛏ (hold to keep digging), place ▣, craft C, flight ✈, pause, and ▤ inventory (beside the hotbar). Tap a hotbar slot to select it.
+
+Crafting works two ways: press `C` to craft the selected hotbar slot, or open the **inventory** (`E` / ▤) to see everything you carry with craft buttons and recipes inline. The **field guide** (`H`, or the 📖 button on the menu, or `? guide` inside the inventory) pictures every block with its recipe and what it does.
 
 Crafting works on the *selected hotbar slot*: select lichen (`7`), and the hint above the hotbar shows the recipe; press `C` to craft, then right-click to place. First goal: mine ice + regolith → craft lichen → plant it.
 
@@ -40,6 +44,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Planet temperature** (HUD `temp`, starts −58°C, cap 28°C)
 - `temp = −58 + 3°C per heater anywhere + 1.6°C per 1% O₂` (greenhouse effect). So heaters bootstrap warming, then forests take over.
+- Heaters are **nuclear**: each one costs 2 rock + 1 **plutonium ore**, which only spawns deep underground (below y≈12 — the debug readout top-left shows your y). Warming the planet means real mining expeditions into the dark.
 
 **Milestones**: >0°C frozen lakes melt · ≥10% O₂ the open air is breathable · ≥12% O₂ and ≥5°C the regolith turns green. The sky lerps from rust-dark to blue with O₂.
 
@@ -61,7 +66,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
 
-**Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt and ice aren't on the hotbar — they live in inventory as crafting ingredients.)
+**Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium aren't on the hotbar — they live in your inventory as crafting ingredients; press `E` to see them.)
 
 ## How it works
 
