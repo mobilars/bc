@@ -1,7 +1,14 @@
 {
   "name": "blockcraft",
+  "main": "src/server.js",
   "compatibility_date": "2026-07-10",
   "assets": {
     "directory": "./public"
-  }
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "World" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["World"] }
+  ]
 }

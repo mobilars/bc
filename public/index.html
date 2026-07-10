@@ -30,6 +30,19 @@
   .slot .num{position:absolute;top:1px;left:4px;font:600 10px var(--mono);color:var(--sage)}
   .slot.sel{border-color:var(--gold);transform:translateY(-5px)}
   .slot.sel .num{color:var(--gold)}
+  .slot .cnt{position:absolute;bottom:1px;right:4px;font:700 11px var(--mono);
+    color:var(--bone);text-shadow:0 1px 2px rgba(0,0,0,.8)}
+  .slot.empty canvas{opacity:.35}
+  .slot.empty .cnt{color:#f08c6a}
+  #tags{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+  .tag{position:absolute;transform:translate(-50%,-100%);font:600 11px var(--mono);
+    color:var(--bone);background:rgba(14,19,15,.6);padding:2px 7px;border-radius:4px;white-space:nowrap}
+  #mpbar{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  #mpbar label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px;
+    font:600 11px var(--mono);color:var(--sage);text-transform:uppercase;letter-spacing:.08em}
+  #mpbar input{font:600 14px var(--mono);color:var(--bone);background:rgba(255,255,255,.06);
+    border:1px solid var(--edge);border-radius:6px;padding:8px 10px;outline:none}
+  #mpbar input:focus{border-color:var(--gold)}
   #itemname{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);
     font:600 13px var(--mono);color:var(--bone);text-shadow:0 1px 3px rgba(0,0,0,.6);
     opacity:0;transition:opacity .4s;pointer-events:none}
@@ -79,6 +92,7 @@
 <div id="cross"></div>
 <div id="itemname"></div>
 <div id="hotbar"></div>
+<div id="tags"></div>
 <div id="debug"></div>
 
 <div id="menu">
@@ -94,7 +108,13 @@
       <kbd>Right click</kbd><span>place block</span>
       <kbd>1–9 · wheel</kbd><span>pick block</span>
       <kbd>F</kbd><span>toggle flight</span>
+      <kbd>C</kbd><span>craft selected</span>
+      <kbd>G</kbd><span>creative mode</span>
       <kbd>Esc</kbd><span>pause</span>
+    </div>
+    <div id="mpbar">
+      <label>Name <input id="pname" maxlength="16" autocomplete="off"></label>
+      <label>World <input id="pworld" maxlength="32" autocomplete="off" spellcheck="false"></label>
     </div>
     <div id="btns">
       <button id="play">▶ Play</button>
@@ -111,13 +131,27 @@
 /* ================= persistence ================= */
 const SKEY='blockcraft-save-v1';
 let SEED=(Math.random()*2**31)|0, editsFlat={}, savedPlayer=null, saveDirty=false;
+let inv={}, creative=false;
 try{
   const s=JSON.parse(localStorage.getItem(SKEY));
-  if(s && typeof s.seed==='number'){ SEED=s.seed; editsFlat=s.edits||{}; savedPlayer=s.player||null; }
+  if(s && typeof s.seed==='number'){
+    SEED=s.seed; editsFlat=s.edits||{}; savedPlayer=s.player||null;
+    inv=s.inv||{}; creative=!!s.creative;
+  }
 }catch(e){}
+function playerState(){
+  return {x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel};
+}
 function saveNow(){
-  try{ localStorage.setItem(SKEY,JSON.stringify({seed:SEED,edits:editsFlat,
-    player:{x:P.x,y:P.y,z:P.z,yaw:P.yaw,pitch:P.pitch,fly:P.fly,sel:P.sel}})); }catch(e){}
+  try{
+    if(typeof MP!=='undefined'&&MP.on)
+      // in multiplayer the server owns the world; only remember our own state per world
+      localStorage.setItem('blockcraft-pos-'+WORLD,
+        JSON.stringify({player:playerState(),inv,creative}));
+    else
+      localStorage.setItem(SKEY,JSON.stringify({seed:SEED,edits:editsFlat,
+        player:playerState(),inv,creative}));
+  }catch(e){}
   saveDirty=false;
 }
 setInterval(()=>{ if(saveDirty) saveNow(); },3000);
@@ -211,6 +245,12 @@ function buildAtlas(){
   px(10,4,4,'rgba(226,244,250,.9)'); px(10,11,12,'rgba(226,244,250,.9)');
   tileNoise(11,[46,94,182],28);                       // water
   for(let k=0;k<24;k++) px(11,(Math.random()*16)|0,(Math.random()*16)|0,'rgb(88,140,224)');
+  tileNoise(12,[226,185,144],14);                     // player head
+  for(const ex of [4,5,10,11]) px(12,ex,6,'rgb(58,42,32)');
+  px(12,7,10,'rgb(152,92,72)'); px(12,8,10,'rgb(152,92,72)');
+  tileNoise(13,[186,72,64],18);                       // shirts
+  tileNoise(14,[74,104,186],18);
+  tileNoise(15,[84,150,96],18);
 }
 buildAtlas();
 
@@ -315,19 +355,22 @@ function getBlock(x,y,z){
   return ch.data[(y<<8)|((z&15)<<4)|(x&15)];
 }
 function markDirty(cx,cz){ if(chunks.has(cx+','+cz)) dirty.add(cx+','+cz); }
-function setBlock(x,y,z,id){
+function applyBlock(x,y,z,id){ // write a block into the live world (local or remote edit)
   if(y<0||y>=CY) return;
-  const cx=x>>4,cz=z>>4,ch=chunks.get(cx+','+cz);
-  if(!ch) return;
-  const lx=x&15,lz=z&15,idx=(y<<8)|(lz<<4)|lx;
-  ch.data[idx]=id;
-  editsFlat[x+','+y+','+z]=id;
+  const cx=x>>4,cz=z>>4,lx=x&15,lz=z&15,idx=(y<<8)|(lz<<4)|lx;
   if(!editsByChunk.has(cx+','+cz)) editsByChunk.set(cx+','+cz,new Map());
-  editsByChunk.get(cx+','+cz).set(idx,id);
-  saveDirty=true;
+  editsByChunk.get(cx+','+cz).set(idx,id); // survives chunk unload/regen
+  const ch=chunks.get(cx+','+cz);
+  if(!ch) return;
+  ch.data[idx]=id;
   markDirty(cx,cz);
   if(lx===0)markDirty(cx-1,cz); if(lx===15)markDirty(cx+1,cz);
   if(lz===0)markDirty(cx,cz-1); if(lz===15)markDirty(cx,cz+1);
+}
+function setBlock(x,y,z,id){ // a deliberate player edit: sync to server, or persist locally
+  applyBlock(x,y,z,id);
+  if(MP.on) mpSend({t:'set',x,y,z,id});
+  else{ editsFlat[x+','+y+','+z]=id; saveDirty=true; }
 }
 function genChunk(cx,cz){
   const data=new Uint8Array(16*16*CY);
@@ -483,15 +526,21 @@ function cellFree(ix,iy,iz){
 }
 
 /* ================= sound ================= */
-let actx=null;
-function sfx(f0,f1,dur,type){
+// a soft click: short noise burst through a bandpass; f0 only sets its brightness
+let actx=null,clickBuf=null;
+function sfx(f0){
   try{
     actx=actx||new (window.AudioContext||window.webkitAudioContext)();
-    const t=actx.currentTime,o=actx.createOscillator(),g=actx.createGain();
-    o.type=type; o.frequency.setValueAtTime(f0,t);
-    o.frequency.exponentialRampToValueAtTime(Math.max(f1,1),t+dur);
-    g.gain.setValueAtTime(.12,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
-    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur);
+    if(!clickBuf){
+      clickBuf=actx.createBuffer(1,(actx.sampleRate*.04)|0,actx.sampleRate);
+      const d=clickBuf.getChannelData(0);
+      for(let i=0;i<d.length;i++){ const f=1-i/d.length; d[i]=(Math.random()*2-1)*f*f*f; }
+    }
+    const src=actx.createBufferSource(); src.buffer=clickBuf;
+    const bp=actx.createBiquadFilter();
+    bp.type='bandpass'; bp.frequency.value=Math.min(4200,400+f0*6); bp.Q.value=1.1;
+    const g=actx.createGain(); g.gain.value=.3;
+    src.connect(bp); bp.connect(g); g.connect(actx.destination); src.start();
   }catch(e){}
 }
 
@@ -521,19 +570,52 @@ HOTBAR.forEach((id,i)=>{
   const n=document.createElement('span'); n.className='num'; n.textContent=i+1;
   const c=document.createElement('canvas'); c.width=16; c.height=16;
   c.getContext('2d').drawImage(atlas,INFO[id].icon*16,0,16,16,0,0,16,16);
-  s.appendChild(n); s.appendChild(c); hotbarEl.appendChild(s);
+  const cnt=document.createElement('span'); cnt.className='cnt';
+  s.appendChild(n); s.appendChild(c); s.appendChild(cnt); hotbarEl.appendChild(s);
 });
+function updateSlots(){
+  [...hotbarEl.children].forEach((s,k)=>{
+    const id=HOTBAR[k], have=inv[id]||0;
+    s.querySelector('.cnt').textContent=creative?'∞':(have||'');
+    s.classList.toggle('empty',!creative&&!have);
+  });
+}
+function toast(msg){
+  itemname.textContent=msg; itemname.style.opacity=1;
+  clearTimeout(nameTimer); nameTimer=setTimeout(()=>itemname.style.opacity=0,1800);
+}
+// blocks that don't occur naturally are crafted from ones that do
+const CRAFT={ 7:{from:4,n:4}, 9:{from:6,n:1}, 8:{from:3,n:1} };
+function craft(){
+  const id=HOTBAR[P.sel], r=CRAFT[id];
+  if(creative) return toast('Creative mode — everything is free');
+  if(!r) return toast(INFO[id].n+' is mined, not crafted');
+  if(!(inv[r.from]>0)) return toast('Need 1 '+INFO[r.from].n.toLowerCase()+' to craft '+INFO[id].n.toLowerCase());
+  inv[r.from]--; inv[id]=(inv[id]||0)+r.n; saveDirty=true; updateSlots();
+  toast('Crafted '+r.n+' '+INFO[id].n.toLowerCase());
+  sfx(520,760,.08,'triangle');
+}
 function selectSlot(i){
   P.sel=(i+HOTBAR.length)%HOTBAR.length;
   [...hotbarEl.children].forEach((s,k)=>s.classList.toggle('sel',k===P.sel));
-  itemname.textContent=INFO[HOTBAR[P.sel]].n;
-  itemname.style.opacity=1;
-  clearTimeout(nameTimer); nameTimer=setTimeout(()=>itemname.style.opacity=0,1200);
+  const id=HOTBAR[P.sel];
+  toast(INFO[id].n+(CRAFT[id]&&!creative?'  ·  C crafts from '+INFO[CRAFT[id].from].n.toLowerCase():''));
   saveDirty=true;
 }
-selectSlot(P.sel|0); itemname.style.opacity=0;
+selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
 
 document.getElementById('play').addEventListener('click',()=>{
+  const nv=pnameEl.value.trim().slice(0,16);
+  if(nv&&nv!==myName){
+    myName=nv;
+    try{ localStorage.setItem('blockcraft-name',myName); }catch(e){}
+  }
+  const wv=(pworldEl.value.trim()||'overworld').slice(0,32);
+  if(wv!==WORLD&&location.protocol!=='file:'){
+    saveNow();
+    location.search='?world='+encodeURIComponent(wv);
+    return;
+  }
   if(!cv.requestPointerLock) return startFallback();
   try{
     const r=cv.requestPointerLock();
@@ -563,12 +645,22 @@ document.addEventListener('mousedown',e=>{
   if(e.button===0&&hit){
     if(hit.y<=0) return; // bedrock floor
     setBlock(hit.x,hit.y,hit.z,0);
+    if(!creative){ inv[hit.id]=(inv[hit.id]||0)+1; saveDirty=true; updateSlots(); }
     sfx(150,55,.1,'square');
   }else if(e.button===2&&hit&&hit.prev){
     const [px_,py_,pz_]=hit.prev;
     const cur=getBlock(px_,py_,pz_);
     if((cur===0||cur===WATER)&&cellFree(px_,py_,pz_)){
-      setBlock(px_,py_,pz_,HOTBAR[P.sel]);
+      const id=HOTBAR[P.sel];
+      if(!creative){
+        if(!(inv[id]>0)){
+          toast('No '+INFO[id].n.toLowerCase()+' — mine some first');
+          sfx(120,70,.09,'sawtooth');
+          return;
+        }
+        inv[id]--; saveDirty=true; updateSlots();
+      }
+      setBlock(px_,py_,pz_,id);
       sfx(300,460,.07,'square');
     }
   }
@@ -579,11 +671,163 @@ document.addEventListener('keydown',e=>{
   if(!uiActive()) return;
   if(e.code==='Escape'&&fallbackMode) return pause();
   if(e.code==='KeyF'){ P.fly=!P.fly; P.vy=0; sfx(P.fly?500:260,P.fly?700:180,.08,'triangle'); }
+  if(e.code==='KeyC') craft();
+  if(e.code==='KeyG'){
+    creative=!creative; saveDirty=true; updateSlots();
+    toast(creative?'Creative mode — infinite blocks':'Survival mode — mine to build');
+    sfx(creative?400:300,creative?620:200,.09,'triangle');
+  }
   if(e.code.startsWith('Digit')){ const d=+e.code.slice(5); if(d>=1&&d<=HOTBAR.length) selectSlot(d-1); }
   if(e.code==='Space') e.preventDefault();
 });
 document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.addEventListener('wheel',e=>{ if(uiActive()) selectSlot(P.sel+(e.deltaY>0?1:-1)); });
+
+/* ================= multiplayer ================= */
+const WORLD=(new URLSearchParams(location.search).get('world')||'overworld').slice(0,32)||'overworld';
+let myName='Miner'+((Math.random()*900+100)|0);
+try{ myName=localStorage.getItem('blockcraft-name')||myName; }catch(e){}
+const pnameEl=document.getElementById('pname'),pworldEl=document.getElementById('pworld');
+const statusEl=document.getElementById('seedlbl'),tagsEl=document.getElementById('tags');
+pnameEl.value=myName; pworldEl.value=WORLD;
+const MP={on:false,ws:null,id:null,players:new Map()};
+const tagEls=new Map();
+let lastPV=null;
+function mpSend(o){ if(MP.on&&MP.ws&&MP.ws.readyState===1) MP.ws.send(JSON.stringify(o)); }
+function updateStatus(){
+  statusEl.textContent=MP.on
+    ?'● online — '+(MP.players.size+1)+' in “'+WORLD+'”'
+    :'offline · seed '+(SEED>>>0).toString(36);
+}
+function removeTag(id){ const el=tagEls.get(id); if(el){ el.remove(); tagEls.delete(id); } }
+function newRemote(name){ return {name,x:0,y:-999,z:0,tx:0,ty:-999,tz:0,yaw:0}; }
+function resetWorld(){ // the server's seed replaced ours: regenerate everything
+  for(const ch of chunks.values()){ freeMesh(ch.solid); freeMesh(ch.water); }
+  chunks.clear(); dirty.clear();
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem('blockcraft-pos-'+WORLD)); }catch(e){}
+  if(s&&s.player&&typeof s.player.x==='number'){
+    Object.assign(P,s.player); inv=s.inv||{}; creative=!!s.creative;
+  }else{
+    P.x=8.5; P.z=8.5; P.y=heightAt(8,8)+3; P.pitch=-.15; inv={}; creative=false;
+  }
+  P.vy=0; selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
+  const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
+  for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++) genChunk(pcx+dx,pcz+dz);
+}
+let mpAttempts=0;
+function connect(){
+  if(location.protocol==='file:') return; // opened directly: single player
+  let ws;
+  try{
+    ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+
+      '/ws?world='+encodeURIComponent(WORLD)+'&name='+encodeURIComponent(myName));
+  }catch(e){ return; }
+  ws.onmessage=e=>{
+    let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
+    if(m.t==='join'){
+      MP.on=true; MP.ws=ws; MP.id=m.you; mpAttempts=0;
+      SEED=m.seed;
+      editsByChunk.clear();
+      for(const k in m.edits){
+        const [x,y,z]=k.split(',').map(Number), ck=(x>>4)+','+(z>>4);
+        if(!editsByChunk.has(ck)) editsByChunk.set(ck,new Map());
+        editsByChunk.get(ck).set((y<<8)|((z&15)<<4)|(x&15),m.edits[k]);
+      }
+      MP.players.clear();
+      for(const p of m.players) MP.players.set(p.id,newRemote(p.name));
+      resetWorld();
+      document.getElementById('newworld').style.display='none';
+      toast('Joined “'+WORLD+'” as '+myName);
+      updateStatus();
+    }else if(m.t==='set'){ applyBlock(m.x,m.y,m.z,m.id); }
+    else if(m.t==='pos'){
+      let p=MP.players.get(m.id);
+      if(!p){ p=newRemote('player'); MP.players.set(m.id,p); }
+      if(p.ty<-900){ p.x=m.x; p.y=m.y; p.z=m.z; }
+      p.tx=m.x; p.ty=m.y; p.tz=m.z; p.yaw=m.yaw;
+    }else if(m.t==='joined'){
+      MP.players.set(m.id,newRemote(m.name));
+      toast(m.name+' joined'); updateStatus();
+    }else if(m.t==='leave'){
+      const p=MP.players.get(m.id);
+      MP.players.delete(m.id); removeTag(m.id);
+      if(p) toast(p.name+' left');
+      updateStatus();
+    }
+  };
+  ws.onclose=()=>{
+    const was=MP.on;
+    MP.on=false; MP.ws=null;
+    for(const id of [...MP.players.keys()]) removeTag(id);
+    MP.players.clear(); updateStatus();
+    if(was){ toast('Connection lost — reconnecting…'); setTimeout(connect,3000); }
+    else if(++mpAttempts<3) setTimeout(connect,4000); // static host without a server: give up quietly
+  };
+}
+connect(); updateStatus();
+setInterval(()=>{
+  if(MP.on&&uiActive())
+    mpSend({t:'pos',x:+P.x.toFixed(2),y:+P.y.toFixed(2),z:+P.z.toFixed(2),yaw:+P.yaw.toFixed(3)});
+},100);
+setInterval(()=>{ if(MP.on) saveNow(); },4000);
+
+function strHash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
+function pushBox(v,ii,cx,cy,cz,hx,h,hz,yaw,tile){
+  const c=Math.cos(yaw),s=Math.sin(yaw);
+  for(const F of FACES){
+    const base=v.length/6;
+    for(const q of F.c){
+      const ox=(q[0]*2-1)*hx, oy=q[1]*h, oz=(q[2]*2-1)*hz;
+      v.push(cx+ox*c-oz*s, cy+oy, cz+ox*s+oz*c,
+        (tile+.02+q[3]*.96)/16, .02+q[4]*.96, F.sh);
+    }
+    ii.push(base,base+1,base+2,base,base+2,base+3);
+  }
+}
+const pVbo=gl.createBuffer(), pIbo=gl.createBuffer();
+function drawPlayers(){ // runs inside the solid pass: progW, texture and uniforms already set
+  if(!MP.players.size) return;
+  const v=[],ii=[];
+  for(const p of MP.players.values()){
+    if(p.ty<-900) continue;
+    pushBox(v,ii,p.x,p.y,p.z,.24,1.15,.15,p.yaw,13+strHash(p.name)%3);
+    pushBox(v,ii,p.x,p.y+1.15,p.z,.22,.45,.22,p.yaw,12);
+  }
+  if(!ii.length) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER,pVbo);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.DYNAMIC_DRAW);
+  bindChunkAttribs();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,pIbo);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(ii),gl.DYNAMIC_DRAW);
+  gl.drawElements(gl.TRIANGLES,ii.length,gl.UNSIGNED_SHORT,0);
+}
+function updateRemotePlayers(dt){
+  const k=Math.min(1,dt*12);
+  for(const p of MP.players.values()){
+    if(p.ty<-900) continue;
+    p.x+=(p.tx-p.x)*k; p.y+=(p.ty-p.y)*k; p.z+=(p.tz-p.z)*k;
+  }
+}
+function updateTags(){
+  if(!lastPV) return;
+  for(const [id,p] of MP.players){
+    let el=tagEls.get(id);
+    if(!el){
+      el=document.createElement('div'); el.className='tag';
+      el.textContent=p.name; tagsEl.appendChild(el); tagEls.set(id,el);
+    }
+    const X=p.x,Y=p.y+1.95,Z=p.z;
+    const w=lastPV[3]*X+lastPV[7]*Y+lastPV[11]*Z+lastPV[15];
+    const dist=Math.hypot(X-P.x,Y-P.y,Z-P.z);
+    if(w<0.3||dist>40||p.ty<-900||!uiActive()){ el.style.display='none'; continue; }
+    const sx=(lastPV[0]*X+lastPV[4]*Y+lastPV[8]*Z+lastPV[12])/w;
+    const sy=(lastPV[1]*X+lastPV[5]*Y+lastPV[9]*Z+lastPV[13])/w;
+    el.style.display='block';
+    el.style.left=((sx*.5+.5)*100)+'vw';
+    el.style.top=((-sy*.5+.5)*100)+'vh';
+  }
+}
 
 /* ================= chunk streaming ================= */
 function ensureChunks(){
@@ -638,6 +882,7 @@ function render(){
   gl.disable(gl.CULL_FACE);
   const proj=mPersp(1.22,cv.width/cv.height,.1,400);
   const view=mMul(mRotX(-P.pitch),mMul(mRotY(-P.yaw),mTrans(-P.x,-(P.y+EYE),-P.z)));
+  lastPV=mMul(proj,view);
   gl.useProgram(progW);
   gl.uniformMatrix4fv(W.uProj,false,proj);
   gl.uniformMatrix4fv(W.uView,false,view);
@@ -654,6 +899,7 @@ function render(){
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ch.solid.ibo);
     gl.drawElements(gl.TRIANGLES,ch.solid.count,ch.solid.type,0);
   }
+  drawPlayers();
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
   gl.depthMask(false);
@@ -690,7 +936,9 @@ function frame(t){
   const dt=Math.min(.05,(t-last)/1000); last=t; frameN++;
   ensureChunks(); processDirty();
   if(uiActive()&&chunks.has((Math.floor(P.x)>>4)+','+(Math.floor(P.z)>>4))) updatePlayer(dt);
+  updateRemotePlayers(dt);
   render();
+  updateTags();
   const eyeIn=getBlock(Math.floor(P.x),Math.floor(P.y+EYE),Math.floor(P.z))===WATER;
   tint.style.display=eyeIn&&uiActive()?'block':'none';
   fpsN++; fpsT+=dt;
@@ -698,9 +946,10 @@ function frame(t){
     fps=Math.round(fpsN/fpsT); fpsN=0; fpsT=0;
     const dirs=['N','NE','E','SE','S','SW','W','NW'];
     const a=((-P.yaw%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
-    debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+
+    debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+(creative?'  ◆ creative':'')+
       '\nx '+P.x.toFixed(1)+'  y '+P.y.toFixed(1)+'  z '+P.z.toFixed(1)+
-      '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8];
+      '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8]+
+      (MP.on?'\nonline — '+(MP.players.size+1)+' in “'+WORLD+'”':'\noffline');
   }
 }
 requestAnimationFrame(frame);
