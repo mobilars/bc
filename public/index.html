@@ -79,6 +79,7 @@
     pointer-events:none;z-index:10}
 
   /* ---------- inventory & field guide panels ---------- */
+  #space{position:fixed;inset:0;z-index:25;display:none;touch-action:none}
   #inv,#help,#trade{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;
     display:none;flex-direction:column;width:min(92vw,560px);max-height:min(80vh,660px);
     background:var(--panel);border:1px solid var(--edge);border-radius:12px;overflow:hidden}
@@ -214,6 +215,7 @@
   </div>
   <div id="helplist"></div>
 </div>
+<canvas id="space"></canvas>
 <div id="trade">
   <div class="phead">Aurelia — Orbital Market
     <span class="pbtns"><span id="creds"></span><button id="tradeback">🜲 fly home</button></span>
@@ -936,6 +938,11 @@ document.addEventListener('keydown',e=>{
     }
     e.preventDefault(); return;
   }
+  if(SP.on){ // the flight owns the keyboard
+    keys[e.code]=true;
+    if(e.code==='Escape') endSpace('abort');
+    e.preventDefault(); return;
+  }
   if(panelOpen()&&(e.code==='KeyE'||e.code==='KeyH'||e.code==='Escape')){
     showPanel(null); e.preventDefault(); return;
   }
@@ -1111,12 +1118,13 @@ function renderTrade(){
   }
 }
 function launchTrip(){
-  if(tradeOpen) return;
+  if(tradeOpen||SP.on) return;
   if(!nearLander()) return toast('The starship is the lander — board it to launch');
   if(!creative&&(inv[PLUT]||0)<FUEL) return toast('Launch needs '+FUEL+' plutonium for fuel');
   if(!creative){ inv[PLUT]-=FUEL; saveDirty=true; updateSlots(); }
+  if(locked){ relock=true; document.exitPointerLock(); } // the flight needs a free cursor
   fadeEl.style.opacity=1; sfx(900); beep(220,.5);
-  setTimeout(()=>{ showPanel('trade'); fadeEl.style.opacity=0; },700);
+  setTimeout(()=>{ fadeEl.style.opacity=0; startSpace(); },700);
 }
 function endTrip(){
   fadeEl.style.opacity=1; beep(320,.4);
@@ -1125,6 +1133,160 @@ function endTrip(){
     toast('Touched down at the lander'); saveDirty=true;
   },600);
 }
+
+/* ================= the flight: asteroid & pirate run ================= */
+// Launching doesn't just fade to the market — you fly the lane. Dodge asteroids,
+// let the auto-cannon chew through pirates, survive to the far side. Kills pay
+// salvage credits on the spot; losing the ship pods you home minus the fuel.
+const spaceCv=document.getElementById('space'),sctx=spaceCv.getContext('2d');
+const SP={on:false};
+function startSpace(){
+  spaceCv.width=innerWidth; spaceCv.height=innerHeight;
+  Object.assign(SP,{on:true,t:0,dur:40,hp:3,x:innerWidth/2,y:innerHeight*.82,
+    inv:0,fire:0,shotN:0,earn:0,last:performance.now(),
+    shots:[],rocks:[],pirates:[],pbul:[],
+    stars:Array.from({length:130},()=>({x:Math.random()*innerWidth,
+      y:Math.random()*innerHeight,s:Math.random()*1.8+.4,v:18+Math.random()*46})),
+    aimX:null,aimY:null});
+  spaceCv.style.display='block';
+  requestAnimationFrame(spaceFrame);
+}
+function endSpace(how){ // 'arrive' | 'die' | 'abort'
+  SP.on=false; spaceCv.style.display='none';
+  if(how==='arrive'){ showPanel('trade'); toast('Docked at Aurelia — cargo hold intact'); return; }
+  fadeEl.style.opacity=1;
+  setTimeout(()=>{
+    fadeEl.style.opacity=0;
+    toast(how==='die'?'Ship destroyed — escape pod returned you to the colony'
+      :'Turned back — the fuel is spent');
+    if(relock){ // give the cursor back to the world if we borrowed it
+      relock=false;
+      try{ const r=cv.requestPointerLock(); if(r&&r.catch) r.catch(startFallback); }
+      catch(e){ startFallback(); }
+    }
+  },700);
+}
+function spaceHit(){ // one hit on the hull
+  SP.hp--; SP.inv=1.3; beep(150,.25);
+  if(SP.hp<=0) endSpace('die');
+}
+function spaceFrame(now){
+  if(!SP.on) return;
+  requestAnimationFrame(spaceFrame);
+  const dt=Math.min(.05,(now-SP.last)/1000); SP.last=now;
+  if(spaceCv.width!==innerWidth||spaceCv.height!==innerHeight){
+    spaceCv.width=innerWidth; spaceCv.height=innerHeight;
+  }
+  const W=spaceCv.width,H=spaceCv.height;
+  SP.t+=dt; SP.inv=Math.max(0,SP.inv-dt);
+  if(SP.t>=SP.dur) return endSpace('arrive');
+  // -- steer: keys beat pointer; pointer target set by touch-drag or mouse
+  const kx=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0);
+  const ky=(keys.ArrowDown||keys.KeyS?1:0)-(keys.ArrowUp||keys.KeyW?1:0);
+  if(kx||ky){ SP.aimX=null; SP.x+=kx*460*dt; SP.y+=ky*460*dt; }
+  else if(SP.aimX!==null){
+    SP.x+=(SP.aimX-SP.x)*Math.min(1,dt*14);
+    SP.y+=(SP.aimY-SP.y)*Math.min(1,dt*14);
+  }
+  SP.x=Math.max(18,Math.min(W-18,SP.x));
+  SP.y=Math.max(H*.3,Math.min(H-26,SP.y));
+  // -- auto-cannon
+  SP.fire-=dt;
+  if(SP.fire<=0){
+    SP.fire=.16; SP.shots.push({x:SP.x,y:SP.y-14});
+    if(++SP.shotN%3===0) sfx(320);
+  }
+  // -- spawns ramp up along the lane
+  if(Math.random()<dt*(.8+SP.t*.05)){
+    const r=13+Math.random()*24;
+    SP.rocks.push({x:Math.random()*W,y:-40,vx:(Math.random()-.5)*46,
+      vy:60+Math.random()*100+SP.t*2,r,hp:Math.ceil(r/12),rot:Math.random()*7,vr:(Math.random()-.5)*2});
+  }
+  if(SP.t>5&&SP.pirates.length<1+SP.t/14&&Math.random()<dt*.22){
+    SP.pirates.push({bx:W*(.15+Math.random()*.7),y:-30,ty:70+Math.random()*130,
+      ph:Math.random()*7,hp:3,ct:1+Math.random()});
+  }
+  // -- move & collide
+  for(const s of SP.shots) s.y-=760*dt;
+  SP.shots=SP.shots.filter(s=>s.y>-20&&!s.hit);
+  for(const r of SP.rocks){
+    r.x+=r.vx*dt; r.y+=r.vy*dt; r.rot+=r.vr*dt;
+    for(const s of SP.shots) if(!s.hit&&Math.hypot(s.x-r.x,s.y-r.y)<r.r){
+      s.hit=true;
+      if(--r.hp<=0){ r.dead=true; SP.earn++; credits++; saveDirty=true; sfx(140); }
+    }
+    if(!r.dead&&!SP.inv&&Math.hypot(SP.x-r.x,SP.y-r.y)<r.r+11){ r.dead=true; spaceHit(); }
+  }
+  SP.rocks=SP.rocks.filter(r=>!r.dead&&r.y<H+60);
+  for(const p of SP.pirates){
+    p.y+=(p.ty-p.y)*Math.min(1,dt*2);
+    p.x=p.bx+Math.sin(SP.t*.9+p.ph)*W*.22;
+    p.ct-=dt;
+    if(p.ct<=0&&p.y>30){
+      p.ct=1.3+Math.random()*.9;
+      const dx=SP.x-p.x,dy=SP.y-p.y,m=Math.hypot(dx,dy)||1;
+      SP.pbul.push({x:p.x,y:p.y+10,vx:dx/m*270,vy:dy/m*270});
+      beep(520,.06);
+    }
+    for(const s of SP.shots) if(!s.hit&&Math.hypot(s.x-p.x,s.y-p.y)<16){
+      s.hit=true;
+      if(--p.hp<=0){ p.dead=true; SP.earn+=5; credits+=5; saveDirty=true; beep(740,.12); }
+    }
+    if(!p.dead&&!SP.inv&&Math.hypot(SP.x-p.x,SP.y-p.y)<24){ p.dead=true; spaceHit(); }
+  }
+  SP.pirates=SP.pirates.filter(p=>!p.dead);
+  for(const b of SP.pbul){
+    b.x+=b.vx*dt; b.y+=b.vy*dt;
+    if(!SP.inv&&Math.hypot(SP.x-b.x,SP.y-b.y)<13){ b.dead=true; spaceHit(); }
+  }
+  SP.pbul=SP.pbul.filter(b=>!b.dead&&b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20);
+  if(!SP.on) return; // died mid-frame
+  // -- draw
+  sctx.fillStyle='#0a0714'; sctx.fillRect(0,0,W,H);
+  sctx.fillStyle='#cfd6e4';
+  for(const st of SP.stars){
+    st.y+=st.v*dt; if(st.y>H){ st.y=-2; st.x=Math.random()*W; }
+    sctx.globalAlpha=.25+st.s*.3; sctx.fillRect(st.x,st.y,st.s,st.s+1.5);
+  }
+  sctx.globalAlpha=1;
+  sctx.fillStyle='#ffd9a0'; // shots
+  for(const s of SP.shots) sctx.fillRect(s.x-1.5,s.y-9,3,12);
+  for(const r of SP.rocks){ // asteroids: rough pentagons
+    sctx.save(); sctx.translate(r.x,r.y); sctx.rotate(r.rot);
+    sctx.strokeStyle='#a89b8c'; sctx.lineWidth=2; sctx.beginPath();
+    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2,rr=r.r*(.8+((i*7)%3)*.12);
+      i?sctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):sctx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr); }
+    sctx.closePath(); sctx.stroke(); sctx.restore();
+  }
+  for(const p of SP.pirates){ // pirates: magenta daggers, nose down
+    sctx.fillStyle='#d75fb0'; sctx.beginPath();
+    sctx.moveTo(p.x,p.y+14); sctx.lineTo(p.x-13,p.y-8); sctx.lineTo(p.x,p.y-2);
+    sctx.lineTo(p.x+13,p.y-8); sctx.closePath(); sctx.fill();
+  }
+  sctx.fillStyle='#ff7d6a';
+  for(const b of SP.pbul){ sctx.beginPath(); sctx.arc(b.x,b.y,3.5,0,7); sctx.fill(); }
+  if(!(SP.inv>0&&((SP.inv*10)|0)%2)){ // your ship (blinks while invulnerable)
+    sctx.fillStyle='#f2ece4'; sctx.beginPath();
+    sctx.moveTo(SP.x,SP.y-14); sctx.lineTo(SP.x-11,SP.y+11); sctx.lineTo(SP.x,SP.y+5);
+    sctx.lineTo(SP.x+11,SP.y+11); sctx.closePath(); sctx.fill();
+    sctx.fillStyle='#ff9e64';
+    sctx.fillRect(SP.x-2,SP.y+8,4,5+Math.random()*6);
+  }
+  // -- HUD: progress lane, hull, salvage
+  sctx.fillStyle='rgba(255,255,255,.14)'; sctx.fillRect(W*.2,18,W*.6,6);
+  sctx.fillStyle='#ff9e64'; sctx.fillRect(W*.2,18,W*.6*(SP.t/SP.dur),6);
+  sctx.font='700 12px monospace'; sctx.fillStyle='#f2ece4';
+  sctx.textAlign='center'; sctx.fillText('AURELIA →',W/2,42);
+  sctx.textAlign='left'; sctx.fillText('hull '+'♥'.repeat(Math.max(0,SP.hp)),W*.2,42);
+  sctx.textAlign='right'; sctx.fillText('salvage +'+SP.earn+'¢',W*.8,42);
+  sctx.textAlign='center'; sctx.globalAlpha=Math.max(0,1-SP.t/6);
+  sctx.fillText(touchMode?'drag to fly — cannon is automatic':'WASD / arrows to fly — cannon is automatic · Esc turns back',W/2,H-46);
+  sctx.globalAlpha=1;
+}
+function spaceAim(cx,cy){ SP.aimX=cx; SP.aimY=cy-80; } // fly above the finger
+spaceCv.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; spaceAim(t.clientX,t.clientY); },{passive:false});
+spaceCv.addEventListener('touchmove',e=>{ e.preventDefault(); const t=e.changedTouches[0]; spaceAim(t.clientX,t.clientY); },{passive:false});
+spaceCv.addEventListener('mousemove',e=>{ if(SP.on) spaceAim(e.clientX,e.clientY+40); });
 
 /* ================= touch controls ================= */
 // Parallel to keyboard/mouse: left thumb joystick to move, right thumb drags to
@@ -1822,7 +1984,7 @@ function frame(t){
   requestAnimationFrame(frame);
   const dt=Math.min(.05,(t-last)/1000); last=t; frameN++;
   ensureChunks(); processDirty();
-  if(uiActive()&&chunks.has((Math.floor(P.x)>>4)+','+(Math.floor(P.z)>>4))) updatePlayer(dt);
+  if(uiActive()&&!SP.on&&chunks.has((Math.floor(P.x)>>4)+','+(Math.floor(P.z)>>4))) updatePlayer(dt);
   updateSuit(dt);
   updateRemotePlayers(dt);
   updateCritters(dt);
