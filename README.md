@@ -28,7 +28,7 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 
 **Touch (tablets/phones):** controls appear automatically on touch devices and work alongside keyboard/mouse. Left joystick moves (analog), dragging the world looks around, and buttons handle jump ⤒ / descend ⤓ (flying), mine ⛏ (hold to keep digging), place ▣, craft C, flight ✈, pause, and ▤ inventory (beside the hotbar). Tap a hotbar slot to select it.
 
-Crafting works two ways: press `C` to craft the selected hotbar slot, or open the **inventory** (`E` / ▤) to see everything you carry with craft buttons and recipes inline. The **field guide** (`H`, or the 📖 button on the menu, or `? guide` inside the inventory) pictures every block with its recipe and what it does.
+Crafting works two ways: press `C` to craft the selected hotbar slot, or open the **inventory** (`E` / ▤) to see everything you carry with craft buttons and recipes inline. The **hotbar is customizable**: select a slot (1–0), open the inventory, and hit `→ slot N` on any placeable item to bind it there — the layout persists in your save. The **field guide** (`H`, or the 📖 button on the menu, or `? guide` inside the inventory) pictures every block with its recipe and what it does.
 
 Crafting works on the *selected hotbar slot*: select lichen (`7`), and the hint above the hotbar shows the recipe; press `C` to craft, then right-click to place. First goal: mine ice + regolith → craft lichen → plant it.
 
@@ -77,7 +77,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Jetpack** — you can't fly on the colony until you craft one (**4 timber + 2 glass + 2 plutonium**, via the inventory since it has no hotbar slot). `F` / ✈ toggles it; it burns **1 plutonium to light and 1 per 12 seconds aloft**, and shuts off dry. Creative mode still flies free.
 
-**Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium aren't on the hotbar — they live in your inventory as crafting ingredients; press `E` to see them.)
+**Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium start off the hotbar as crafting ingredients — press `E` to see them, and assign them to a slot from there if you want to place them.)
 
 ## How it works
 

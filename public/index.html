@@ -288,12 +288,13 @@
 /* ================= persistence ================= */
 const SKEY='planetcrafter-save-v1';
 let SEED=(Math.random()*2**31)|0, editsFlat={}, savedPlayer=null, saveDirty=false;
-let inv={}, creative=false, credits=0;
+let inv={}, creative=false, credits=0, savedHotbar=null;
 try{
   const s=JSON.parse(localStorage.getItem(SKEY));
   if(s && typeof s.seed==='number'){
     SEED=s.seed; editsFlat=s.edits||{}; savedPlayer=s.player||null;
     inv=s.inv||{}; creative=!!s.creative; credits=s.credits|0;
+    savedHotbar=s.hotbar||null; // applied after the block table exists
   }
 }catch(e){}
 function playerState(){
@@ -304,10 +305,10 @@ function saveNow(){
     if(typeof MP!=='undefined'&&MP.on)
       // in multiplayer the server owns the world; only remember our own state per world
       localStorage.setItem('pc-pos-'+WORLD,
-        JSON.stringify({player:playerState(),inv,creative,credits}));
+        JSON.stringify({player:playerState(),inv,creative,credits,hotbar:HOTBAR}));
     else
       localStorage.setItem(SKEY,JSON.stringify({seed:SEED,edits:editsFlat,
-        player:playerState(),inv,creative,credits}));
+        player:playerState(),inv,creative,credits,hotbar:HOTBAR}));
   }catch(e){}
   saveDirty=false;
 }
@@ -371,7 +372,11 @@ const INFO={
 };
 const isOpaque=id=>id!==0&&id!==GLASS&&id!==WATER&&id!==VENT;
 const isSolid=id=>id!==0&&id!==WATER&&id!==VENT; // vents are walk-through
-const HOTBAR=[1,2,8,7,9,18,11,14,17,16]; // basalt and ice live in inventory only (ingredients)
+// The hotbar is customizable: assign any placeable block from the inventory (E).
+const PLACEABLE=[1,2,3,4,5,7,8,9,11,14,16,17,18,19]; // jetpack is gear, never placed
+const validHotbar=h=>Array.isArray(h)&&h.length===10&&h.every(n=>PLACEABLE.includes(n));
+let HOTBAR=[1,2,8,7,9,18,11,14,17,16];
+if(validHotbar(savedHotbar)) HOTBAR=savedHotbar.slice();
 // what mining a block yields (0 = nothing; plants regress to lichen)
 const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18,19:19};
 
@@ -842,15 +847,21 @@ function pause(){
 }
 // pointer lock is blocked in some embedded contexts; play without capturing the mouse
 function startFallback(){ fallbackMode=true; setHUD(true); }
-HOTBAR.forEach((id,i)=>{
-  const s=document.createElement('div'); s.className='slot';
-  const n=document.createElement('span'); n.className='num'; n.textContent=(i+1)%10;
-  const c=document.createElement('canvas'); c.width=16; c.height=16;
-  c.getContext('2d').drawImage(atlas,INFO[id].icon*16,0,16,16,0,0,16,16);
-  const cnt=document.createElement('span'); cnt.className='cnt';
-  s.appendChild(n); s.appendChild(c); s.appendChild(cnt); hotbarEl.appendChild(s);
-  s.addEventListener('click',()=>{ if(uiActive()) selectSlot(i); }); // tap to select
-});
+function buildHotbar(){ // rebuilt whenever a slot is reassigned
+  hotbarEl.textContent='';
+  HOTBAR.forEach((id,i)=>{
+    const s=document.createElement('div'); s.className='slot';
+    const n=document.createElement('span'); n.className='num'; n.textContent=(i+1)%10;
+    const c=document.createElement('canvas'); c.width=16; c.height=16;
+    c.getContext('2d').drawImage(atlas,INFO[id].icon*16,0,16,16,0,0,16,16);
+    const cnt=document.createElement('span'); cnt.className='cnt';
+    s.appendChild(n); s.appendChild(c); s.appendChild(cnt); hotbarEl.appendChild(s);
+    s.classList.toggle('sel',i===(P.sel|0));
+    s.addEventListener('click',()=>{ if(uiActive()) selectSlot(i); }); // tap to select
+  });
+  updateSlots();
+}
+buildHotbar();
 function updateSlots(){
   [...hotbarEl.children].forEach((s,k)=>{
     const id=HOTBAR[k], have=inv[id]||0;
@@ -1065,6 +1076,17 @@ function renderInv(){
       b.disabled=!creative&&r.cost.some(([cid,q])=>(inv[cid]||0)<q);
       b.addEventListener('click',()=>craftId(id));
       row.appendChild(b);
+    }
+    if(PLACEABLE.includes(id)){ // customize the hotbar: put this in the selected slot
+      const a=document.createElement('button'); a.className='craftb';
+      a.textContent='→ slot '+((P.sel+1)%10);
+      a.title='assign to the selected hotbar slot';
+      a.disabled=HOTBAR[P.sel]===id;
+      a.addEventListener('click',()=>{
+        HOTBAR[P.sel]=id; saveDirty=true;
+        buildHotbar(); selectSlot(P.sel); renderInv();
+      });
+      row.appendChild(a);
     }
     const cnt=document.createElement('span'); cnt.className='icnt';
     cnt.textContent=creative?'∞':have;
@@ -1590,6 +1612,7 @@ function resetWorld(){ // the server's seed replaced ours: regenerate everything
   }else{
     P.x=8.5; P.z=8.5; P.y=landerY()+4; P.pitch=-.15; inv={}; creative=false; credits=0;
   }
+  if(s&&validHotbar(s.hotbar)){ HOTBAR=s.hotbar.slice(); buildHotbar(); }
   if(s&&s.player&&typeof s.player.tank==='number') suitO2=s.player.tank;
   P.vy=0; selectSlot(P.sel|0); itemname.style.opacity=0; updateSlots();
   const pcx=Math.floor(P.x)>>4,pcz=Math.floor(P.z)>>4;
