@@ -2195,6 +2195,13 @@ function crowded(x,y,z){ // ≥4 plants in the surrounding 5×5×5 = thick enoug
     if(terraMap.has((x+dx)+','+(y+dy)+','+(z+dz))&&++n>=4) return true;
   return false;
 }
+function treeNearby(x,y,z){ // another trunk within 2 columns: too tight to tree
+  for(let dx=-2;dx<=2;dx++) for(let dz=-2;dz<=2;dz++){
+    if(!dx&&!dz) continue;
+    for(let dy=0;dy<=5;dy++) if(getBlock(x+dx,y+dy,z+dz)===5) return true;
+  }
+  return false;
+}
 let spreadWas=false;
 setInterval(()=>{
   // colder than -5°C nothing but lichen really grows; above it, warmth accelerates
@@ -2231,7 +2238,8 @@ setInterval(()=>{
     let tm=pi.enc&&pi.heat?tempMul(pocketTempOf(pi.heat)):tempM;
     if(id===11) tm=Math.max(tm,.3); // lichen is the cold-tolerant pioneer species
     if(Math.random()<g.p*tm*encM*lightM*RULES.growth){
-      if(g.next) setBlock(x,y,z,g.next); else growTree(x,y,z);
+      if(g.next) setBlock(x,y,z,g.next);
+      else if(!treeNearby(x,y,z)) growTree(x,y,z); // trees need spacing; thickets stall as shrubs
     }
   }
   computeStats(false);

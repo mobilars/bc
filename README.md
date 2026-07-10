@@ -53,6 +53,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Plant growth** — each planted block steps lichen → moss → shrub → tree at a base rate (~40s/60s/90s per step), scaled by:
 - **Temperature**: below **−5°C** growth is ~×0.03 (dormant); above it, ×0.7 scaling up to ×2.2 at 28°C. **Lichen is exempt** — it keeps a ×0.3 floor in any cold, so the first step always works.
+- **Tree spacing**: a shrub only becomes a tree if no other trunk stands within 2 columns — thickets stall as shrubs (still green, still O₂). Space plantings ~3 apart for full forests.
 - **Enclosure ×3**: a sealed air pocket concentrates warmth and moisture.
 - **Local warmth**: plants in a sealed pocket use the *pocket's* temperature: **+6°C per heater touching the pocket's air** (any face counts — a heater fully buried in a wall warms nothing; cap 35°C). Nine heaters lift a −58°C cave past the −5°C growth gate.
 - **Sunlight ×1 / ×0.5**: a plant is sunlit if the column straight above it holds only air or **glass** — windows are real. Windowless caves grow at half speed; a glass roof fixes that.
