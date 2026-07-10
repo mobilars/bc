@@ -1096,10 +1096,11 @@ const TERRA_SET=new Set([6,11,12,13,14]);
 // trees (~22 canopy each) — terraforming is the long game; pockets are the shortcut
 const O2W={6:.0045,11:.0008,12:.002,13:.0035,14:0};
 const GROW={11:{next:12,p:1/40},12:{next:13,p:1/60},13:{next:0,p:1/90}}; // shrub grows a tree
+const POCKET_MAX=2000; // largest air volume a seal can pressurize
 const terraMap=new Map(), encCache=new Map(), lightCache=new Map();
 const critters=new Map(); // nest block key -> its grazer (cosmetic, simulated locally)
 const beacons=new Map();  // placed beacon blocks: each shines a lander-gold beam
-const STATS={o2:.2,temp:-58,plants:0,melted:false,verdant:false,pocket:.2,pocketTemp:-58,sheltered:false,leak:null,covered:false};
+const STATS={o2:.2,temp:-58,plants:0,melted:false,verdant:false,pocket:.2,pocketTemp:-58,sheltered:false,leak:null,covered:false,pocketVol:0};
 const FOG=[.16,.11,.10]; // thin dead-world sky; computeStats lerps it toward blue
 function rebuildTerra(){
   terraMap.clear(); encCache.clear(); lightCache.clear(); critters.clear(); beacons.clear();
@@ -1171,7 +1172,7 @@ const touchesVol=(vol,x,y,z)=>vol.has(x+','+(y+1)+','+z)||vol.has(x+','+(y-1)+',
 function pocketInfo(x,y,z){
   const k=x+','+y+','+z;
   if(encCache.has(k)) return encCache.get(k);
-  const r=getBlock(x,y+1,z)===0?floodAir(x,y+1,z,800):null;
+  const r=getBlock(x,y+1,z)===0?floodAir(x,y+1,z,POCKET_MAX):null;
   const vol=r instanceof Set?r:null;
   let heat=0;
   if(vol) for(const [pk,id] of terraMap){
@@ -1227,9 +1228,12 @@ function updateTerraHUD(){
   terraEl.textContent='';
   const add=(cls,html)=>{ const s=document.createElement('span'); if(cls)s.className=cls; s.innerHTML=html; terraEl.appendChild(s); };
   add('stg',stageName());
-  if(STATS.sheltered) add('pkt','● sealed pocket'); // you'd never guess otherwise
-  else if(STATS.covered&&STATS.leak==='big') add('lk','◌ cave too big to pressurize');
-  else if(STATS.covered&&STATS.leak==='sky') add('lk','◌ unsealed — air escapes somewhere');
+  if(STATS.sheltered) // you'd never guess the seal state otherwise
+    add('pkt','● sealed pocket · '+STATS.pocketVol+'/'+POCKET_MAX+' air');
+  else if(STATS.covered&&STATS.leak==='big')
+    add('lk','◌ too big to pressurize — over '+POCKET_MAX+' air blocks');
+  else if(STATS.covered&&STATS.leak==='sky')
+    add('lk','◌ unsealed — air escapes somewhere');
   add('','O₂ <b>'+STATS.o2.toFixed(2)+'%</b>'+
     (STATS.sheltered?' · pocket <b>'+STATS.pocket.toFixed(1)+'%</b>':''));
   add('','temp <b>'+STATS.temp.toFixed(1)+'°C</b>'+
@@ -1258,7 +1262,7 @@ setInterval(()=>{
   { // sheltered spaces concentrate the O2 of the plants inside
     const was=STATS.sheltered;
     const hx=Math.floor(P.x),hy=Math.floor(P.y+EYE),hz=Math.floor(P.z);
-    const r=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,800):'sky';
+    const r=getBlock(hx,hy,hz)===0?floodAir(hx,hy,hz,POCKET_MAX):'sky';
     const vol=r instanceof Set?r:null;
     if(vol){
       let n=0,h=0;
@@ -1267,12 +1271,13 @@ setInterval(()=>{
         if(id===14){ if(touchesVol(vol,ax,ay,az)) h++; }
         else if(vol.has(ax+','+(ay+1)+','+az)) n++;
       }
-      STATS.sheltered=true; STATS.leak=null;
+      STATS.sheltered=true; STATS.leak=null; STATS.pocketVol=vol.size;
       // ~.1% per exposed plant block: a dozen indoor trees make a pocket breathable
       STATS.pocket=Math.min(24,STATS.o2+n*.1);
       STATS.pocketTemp=pocketTempOf(h);
     }else{
       STATS.sheltered=false; STATS.leak=r; STATS.pocket=STATS.o2; STATS.pocketTemp=STATS.temp;
+      STATS.pocketVol=0;
     }
     STATS.covered=false; // roofed but unsealed means a leak worth hunting
     for(let yy=hy+1;yy<CY;yy++) if(getBlock(hx,yy,hz)!==0){ STATS.covered=true; break; }

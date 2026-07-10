@@ -68,7 +68,8 @@ export class World {
       this.broadcast(ws, { t: 'chat', id: a.id, name: a.name, msg });
     } else if (m.t === 'set'
         && [m.x, m.y, m.z, m.id].every(Number.isInteger)
-        && m.y >= 0 && m.y < 64 && m.id >= 0 && m.id <= 15
+        // max id must track the block table (INFO) in public/index.html
+        && m.y >= 0 && m.y < 64 && m.id >= 0 && m.id <= 18
         && Math.abs(m.x) < 1e7 && Math.abs(m.z) < 1e7) {
       await this.ctx.storage.put('e:' + m.x + ',' + m.y + ',' + m.z, m.id);
       this.editCount = (this.editCount || 0) + 1;
