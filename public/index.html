@@ -945,7 +945,6 @@ const beamVbo=gl.createBuffer();
 }
 const BEAMC=[[.95,.44,.32],[.42,.58,.95],[.95,.78,.40]]; // matches suit tiles
 function drawBeams(proj,view){ // blend pass: depth-tested but not depth-written
-  if(!MP.players.size) return;
   gl.useProgram(progL);
   gl.uniformMatrix4fv(L.uProj,false,proj);
   gl.uniformMatrix4fv(L.uView,false,view);
@@ -953,6 +952,10 @@ function drawBeams(proj,view){ // blend pass: depth-tested but not depth-written
   gl.enableVertexAttribArray(L.aPos);
   gl.vertexAttribPointer(L.aPos,3,gl.FLOAT,false,0,0);
   gl.disableVertexAttribArray(W.aUV); gl.disableVertexAttribArray(W.aShade);
+  // the lander's home beacon: gold, always on, so you can always find air
+  gl.uniform3f(L.uOff,8.5,landerY()+2,8.5);
+  gl.uniform4f(L.uColor,1,.72,.3,.4);
+  gl.drawArrays(gl.TRIANGLES,0,12);
   for(const p of MP.players.values()){
     if(p.ty<-900) continue;
     const c=BEAMC[strHash(p.name)%3];
@@ -1340,9 +1343,12 @@ function frame(t){
       const b=Math.round(((Math.atan2(dx,-dz)*180/Math.PI+360)%360)/45)%8;
       pl+='\n@ '+p.name+'  '+dist+'m '+dirs[b]+'  (y '+Math.round(p.y)+')';
     }
+    const ldx=8.5-P.x,ldz=8.5-P.z,ldist=Math.round(Math.hypot(ldx,ldz));
+    const lb=Math.round(((Math.atan2(ldx,-ldz)*180/Math.PI+360)%360)/45)%8;
     debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+(creative?'  ◆ creative':'')+
       '\nx '+P.x.toFixed(1)+'  y '+P.y.toFixed(1)+'  z '+P.z.toFixed(1)+
       '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8]+
+      '\n⌂ lander '+(ldist<7?'here — refilling O₂':ldist+'m '+dirs[lb])+
       (MP.on?'\nonline — '+(MP.players.size+1)+' in “'+WORLD+'”':'\noffline')+pl;
   }
 }
