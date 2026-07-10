@@ -47,7 +47,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 - `temp = −58 + 3°C per heater anywhere + 1.6°C per 1% O₂` (greenhouse effect). So heaters bootstrap warming, then forests take over.
 - Heaters are **nuclear**: each one costs 2 rock + 1 **plutonium ore**, which only spawns deep underground (below y≈12 — the debug readout top-left shows your y). Warming the planet means real mining expeditions into the dark.
 
-**Milestones**: >0°C frozen lakes melt · ≥10% O₂ the open air is breathable · ≥12% O₂ and ≥5°C the regolith turns green. The sky lerps from rust-dark to blue with O₂.
+**Milestones**: >0°C frozen lakes melt and unmined surface ice sublimates · ≥10% O₂ the open air is breathable · ≥12% O₂ and ≥5°C the regolith turns green. The sky lerps from rust-dark to blue with O₂. **Buried ice veins never melt** — the deep cold keeps the lichen ingredient mineable on a warm world (Ceres-9 sells it too).
 
 **Plant growth** — each planted block steps lichen → moss → shrub → tree at a base rate (~40s/60s/90s per step), scaled by:
 - **Temperature**: below **−5°C** growth is ~×0.03 (dormant); above it, ×0.7 scaling up to ×2.2 at 28°C. **Lichen is exempt** — it keeps a ×0.3 floor in any cold, so the first step always works.
