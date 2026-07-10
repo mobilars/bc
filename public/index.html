@@ -139,8 +139,10 @@
   #bFly{position:absolute;right:28px;bottom:206px;width:44px;height:44px;font-size:16px}
   #bPause{position:absolute;left:50%;top:10px;transform:translateX(-50%);
     width:44px;height:34px;border-radius:8px;font-size:14px}
-  #bInv{position:absolute;left:calc(50% + 300px);bottom:16px;width:48px;height:48px;
-    border-radius:10px;font-size:18px}
+  #bInv{position:absolute;left:calc(50% + 310px);bottom:14px;width:52px;height:52px;
+    border-radius:6px;background:rgba(14,19,15,.72);border:2px solid var(--edge);padding:0}
+  #bInv canvas{width:38px;height:38px;image-rendering:pixelated;border-radius:3px}
+  #bInv:active{border-color:var(--gold);background:rgba(14,19,15,.72)}
   @media (prefers-reduced-motion:reduce){#suit.low{animation:none}}
 
   #chat{position:fixed;left:10px;bottom:84px;display:none;flex-direction:column;gap:3px;
@@ -211,7 +213,7 @@
   <button id="bCraft">C</button>
   <button id="bFly">✈</button>
   <button id="bPause">▮▮</button>
-  <button id="bInv">▤</button>
+  <button id="bInv" title="inventory"></button>
 </div>
 <div id="inv">
   <div class="phead">Inventory
@@ -449,6 +451,12 @@ function buildAtlas(){
   tileNoise(17,[196,90,70],14);                       // suit colors
   tileNoise(18,[86,120,196],14);
   tileNoise(19,[198,162,86],14);
+  tileNoise(25,[144,98,58],14);                       // chest (inventory button icon)
+  ac.fillStyle='rgb(94,60,36)';
+  ac.fillRect(25*16,0,16,1); ac.fillRect(25*16,15,16,1);
+  ac.fillRect(25*16,0,1,16); ac.fillRect(25*16+15,0,1,16);
+  ac.fillRect(25*16,5,16,2);                          // lid seam
+  ac.fillStyle='rgb(255,202,92)'; ac.fillRect(25*16+7,4,2,4); // latch
   tileNoise(24,[148,150,158],12);                     // jetpack: steel pack, twin burners
   ac.fillStyle='rgb(88,92,102)'; ac.fillRect(24*16+3,2,4,10); ac.fillRect(24*16+9,2,4,10);
   ac.fillStyle='rgb(255,138,58)'; ac.fillRect(24*16+4,12,2,3); ac.fillRect(24*16+10,12,2,3);
@@ -876,6 +884,11 @@ function buildHotbar(){ // rebuilt whenever a slot is reassigned
   updateSlots();
 }
 buildHotbar();
+{ // the touch inventory button wears a chest icon, styled like a hotbar slot
+  const c=document.createElement('canvas'); c.width=16; c.height=16;
+  c.getContext('2d').drawImage(atlas,25*16,0,16,16,0,0,16,16);
+  document.getElementById('bInv').appendChild(c);
+}
 function updateSlots(){
   [...hotbarEl.children].forEach((s,k)=>{
     const id=HOTBAR[k], have=inv[id]||0;
