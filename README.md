@@ -67,11 +67,15 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 **Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
 
-**The starship & Aurelia** — the crashed lander doubles as the colony's starship. Stand on its pad and press `L` (or 🚀 in the inventory) to fly to **Aurelia**, the homeworld's orbital market. Each round trip burns **2 plutonium** as fuel.
+**The starship & destinations** — the crashed lander doubles as the colony's starship. Stand on its pad and press `L` (or 🚀 in the inventory) to open the course picker. Three destinations, each with its own fuel cost, lane profile, and payoff:
 
-**The flight is flown, not skipped**: an asteroid-and-pirate lane run. Steer with WASD/arrows (or drag on touch); your cannon fires automatically. Asteroids take hits by size, pirate daggers strafe and shoot aimed bolts, and the spawn rate climbs the whole ~40 seconds. Kills pay **salvage on the spot** (+1¢ per rock, +5¢ per pirate). Your hull takes 3 hits — **lose it and the escape pod dumps you back at the colony, fuel gone**. `Esc` turns back early (fuel still spent).
+- **Aurelia — Orbital Market** (2 plutonium, ~40s, balanced lane): sell colony goods and buy industrial stock for **credits (¢)**, which persist in your save. The station pays cheap and charges ~2×, so export what only your world makes: lichen 4¢, grazers 15¢; buying plutonium at 14¢ can beat mining once exports flow.
+- **Ceres-9 — Ice Asteroid** (1 plutonium, ~25s, dense icy rocks, almost no pirates): land and fill the hold with **~10–14 ice + 1 plutonium**. The cheap grocery run for lichen farming.
+- **The Meridian Wreck** (2 plutonium, ~35s, pirate-infested): salvage pays **25¢ + random spare parts** (timber, glass, plutonium, or a heater).
 
-At the market you sell colony goods and buy industrial stock for **credits (¢)**, which persist in your save — the station pays cheap and charges dear (roughly 2×), so pick your cargo: exotic organics (lichen 4¢, grazers 15¢) earn the most, and buying plutonium at 14¢ can beat mining once your greenhouse exports flow. Fly home and you're back on the pad.
+**The flight is flown, not skipped**: an asteroid-and-pirate lane run. Steer with WASD/arrows (or drag on touch); your cannon fires automatically. Asteroids take hits by size, pirate daggers strafe and shoot aimed bolts, and the spawn rate climbs all the way. Kills pay **salvage on the spot** (+1¢ per rock, +5¢ per pirate). Your hull takes 3 hits — **lose it and the escape pod dumps you back at the colony, fuel gone**. `Esc` turns back early (fuel still spent).
+
+**Jetpack** — you can't fly on the colony until you craft one (**4 timber + 2 glass + 2 plutonium**, via the inventory since it has no hotbar slot). `F` / ✈ toggles it; it burns **1 plutonium to light and 1 per 12 seconds aloft**, and shuts off dry. Creative mode still flies free.
 
 **Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium aren't on the hotbar — they live in your inventory as crafting ingredients; press `E` to see them.)
 
