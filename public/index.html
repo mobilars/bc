@@ -1199,7 +1199,7 @@ const DESTS=[
    note:'A dense, icy rock field — almost no pirates. Land and fill the hold with ice (+ a plutonium chunk).'},
   {key:'wreck',name:'The Meridian Wreck',fuel:2,dur:35,rockM:.5,pirM:2.4,
    bg:'#130712',rockC:'#a89b8c',
-   note:'Pirate hunting ground around a dead freighter. Salvage pays 25¢ and spare parts — if you live.'},
+   note:'Pirate hunting ground around a dead freighter. Bounties pay double here; the hulk yields 40¢ and two crates of parts — if you live.'},
 ];
 const TRADE=[ // [id, station pays ¢, station charges ¢]
   [1,1,2],  [2,1,2],  [3,2,4],  [4,2,4],  [5,3,6],  [7,2,4],  [8,2,4],
@@ -1348,11 +1348,13 @@ function endSpace(how){ // 'arrive' | 'die' | 'abort'
     return;
   }
   if(how==='arrive'&&d.key==='wreck'){
-    const part=[[7,4],[9,3],[19,2],[14,1]][(Math.random()*4)|0];
-    credits+=25; inv[part[0]]=(inv[part[0]]||0)+part[1];
+    const CRATES=[[7,4],[9,3],[19,2],[14,1]];
+    const parts=[CRATES[(Math.random()*4)|0],CRATES[(Math.random()*4)|0]]; // two crates
+    credits+=40;
+    for(const [pid,pn] of parts) inv[pid]=(inv[pid]||0)+pn;
     saveDirty=true; updateSlots();
     showReport(d,'You cut through the freighter\'s hull and stripped what the pirates left behind.',
-      [part],25);
+      parts,40);
     return;
   }
   fadeEl.style.opacity=1;
@@ -1480,7 +1482,10 @@ function spaceFrame(now){
     }
     for(const s of SP.shots) if(!s.hit&&Math.hypot(s.x-p.x,s.y-p.y)<16){
       s.hit=true;
-      if(--p.hp<=0){ p.dead=true; SP.earn+=5; credits+=5; saveDirty=true; beep(740,.12); }
+      if(--p.hp<=0){ // bounties double in the wreck's hunting ground
+        const b=SP.dest.key==='wreck'?10:5;
+        p.dead=true; SP.earn+=b; credits+=b; saveDirty=true; beep(740,.12);
+      }
     }
     if(!p.dead&&!SP.inv&&Math.hypot(SP.x-p.x,SP.y-p.y)<24){ p.dead=true; spaceHit(); }
   }

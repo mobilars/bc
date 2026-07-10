@@ -73,7 +73,7 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 
 - **Aurelia — Orbital Market** (2 plutonium, ~40s, balanced lane): sell colony goods and buy industrial stock for **credits (¢)**, which persist in your save. The station pays cheap and charges ~2×, so export what only your world makes: lichen 4¢, grazers 15¢; buying plutonium at 14¢ can beat mining once exports flow.
 - **Ceres-9 — Ice Asteroid** (1 plutonium, ~25s, dense icy rocks, almost no pirates): land and fill the hold with **~10–14 ice + 1 plutonium**. The cheap grocery run for lichen farming.
-- **The Meridian Wreck** (2 plutonium, ~35s, pirate-infested): salvage pays **25¢ + random spare parts** (timber, glass, plutonium, or a heater).
+- **The Meridian Wreck** (2 plutonium, ~35s, pirate-infested): pirate **bounties pay double (10¢)** in its hunting ground, and the hulk yields **40¢ + two crates of spare parts** (timber, glass, plutonium, or a heater). The skill run — a good pilot clears 100¢+ per trip.
 
 **The flight is flown, not skipped**: an asteroid-and-pirate lane run. Steer with WASD/arrows (or drag on touch); your cannon fires automatically. Asteroids take hits by size, pirate daggers strafe and shoot aimed bolts, and the spawn rate climbs all the way. Kills pay **salvage on the spot** (+1¢ per rock, +5¢ per pirate). Your hull takes 3 hits — **lose it and the escape pod dumps you back at the colony, fuel gone**. `Esc` turns back early (fuel still spent).
 
