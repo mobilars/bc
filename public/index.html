@@ -2103,7 +2103,8 @@ function frame(t){
     debugEl.textContent=fps+' fps'+(P.fly?'  ✈ flying':'')+(creative?'  ◆ creative':'')+
       '\nx '+P.x.toFixed(1)+'  y '+P.y.toFixed(1)+'  z '+P.z.toFixed(1)+
       '\nfacing '+dirs[Math.round(a/(Math.PI/4))%8]+
-      '\n⌂ lander '+(ldist<7?'here — refilling O₂':ldist+'m '+dirs[lb])+
+      '\n⌂ lander '+(ldist<7?'here — O₂ refill · starship: '+(touchMode?'🚀 in ▤':'press L')
+        :ldist+'m '+dirs[lb])+
       (MP.on?'\nonline — '+(MP.players.size+1)+' in “'+WORLD+'”':'\noffline')+pl;
   }
 }
