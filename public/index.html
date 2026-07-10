@@ -375,7 +375,8 @@ function landerY(){ return Math.max(heightAt(8,8),SEA+1); } // spawn pad height
 //      16 air vent (walk-through membrane that keeps O2 in) 17 grazer nest (spawns a critter)
 //      18 beacon (shines a lander-gold locator beam) 19 plutonium ore (deep; fuels heaters)
 //      20 jetpack (equipment, never placed: unlocks flight, burns plutonium)
-const WATER=10, GLASS=9, VENT=16, NEST=17, BEACON=18, PLUT=19, JETPACK=20;
+//      21 wild greens (wind-seeded ground cover; greens the world, never grows taller)
+const WATER=10, GLASS=9, VENT=16, NEST=17, BEACON=18, PLUT=19, JETPACK=20, WILD=21;
 const INFO={
   1:{n:'Regolith',t:0, s:1, b:1, icon:0},
   2:{n:'Rock',    t:2, s:2, b:2, icon:2},
@@ -397,6 +398,7 @@ const INFO={
   18:{n:'Beacon',t:22,s:22,b:22,icon:22},   // same gold beam as the lander's
   19:{n:'Plutonium Ore',t:23,s:23,b:23,icon:23}, // deep-rock ore; heater fuel
   20:{n:'Jetpack',t:24,s:24,b:24,icon:24}, // carried gear — craft it to fly
+  21:{n:'Wild Greens',t:26,s:26,b:26,icon:26}, // spread-only; mines into lichen
 };
 const isOpaque=id=>id!==0&&id!==GLASS&&id!==WATER&&id!==VENT;
 const isSolid=id=>id!==0&&id!==WATER&&id!==VENT; // vents are walk-through
@@ -406,7 +408,7 @@ const validHotbar=h=>Array.isArray(h)&&h.length===10&&h.every(n=>PLACEABLE.inclu
 let HOTBAR=[1,2,8,7,9,18,11,14,17,16];
 if(validHotbar(savedHotbar)) HOTBAR=savedHotbar.slice();
 // what mining a block yields (0 = nothing; plants regress to lichen)
-const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18,19:19};
+const DROP={1:1,15:1,2:2,3:3,4:4,5:5,6:0,7:7,8:8,9:9,11:11,12:11,13:11,14:14,16:16,17:17,18:18,19:19,21:11};
 
 const atlas=document.createElement('canvas'); atlas.width=512; atlas.height=16;
 const ac=atlas.getContext('2d');
@@ -466,6 +468,9 @@ function buildAtlas(){
   tileNoise(17,[196,90,70],14);                       // suit colors
   tileNoise(18,[86,120,196],14);
   tileNoise(19,[198,162,86],14);
+  tileNoise(26,[106,146,82],24);                      // wild greens: pale spring cover
+  for(let k=0;k<18;k++) px(26,rnd16(),rnd16(),'rgb(162,198,118)');
+  for(let k=0;k<8;k++) px(26,rnd16(),rnd16(),'rgb(74,108,58)');
   tileNoise(25,[144,98,58],14);                       // chest (inventory button icon)
   ac.fillStyle='rgb(94,60,36)';
   ac.fillRect(25*16,0,16,1); ac.fillRect(25*16,15,16,1);
@@ -1136,6 +1141,7 @@ const GUIDE=[ // [id, what it does] — drives the help page; icons come from th
   [18,'Shines the lander-gold locator beam. Mark your outposts.'],
   [19,'Radioactive ore in the deep dark (below y≈12). Fuels heaters, jetpacks and the starship.'],
   [20,'Personal thrusters (F / ✈). 12s of flight per plutonium — unused fuel keeps.'],
+  [21,'Wind-seeded ground cover on warm, breathable worlds. Greens the land and adds a little O₂, but never grows taller — forests are always planted. Mine it to collect lichen.'],
 ];
 const HOLDABLE=[1,2,3,4,5,7,8,9,11,14,16,17,18,19,20]; // what can sit in your pack
 const invEl=document.getElementById('inv'),invListEl=document.getElementById('invlist');
@@ -2027,10 +2033,10 @@ fetchWorlds();
 /* ================= terraforming ================= */
 // The planet's state is derived from the shared edit list, so every player
 // computes identical O2/temperature from the same data — no extra netcode.
-const TERRA_SET=new Set([6,11,12,13,14]);
+const TERRA_SET=new Set([6,11,12,13,14,21]);
 // per-block O2 yield, tuned so breathable planet air (10%) takes ~100 grown
 // trees (~22 canopy each) — terraforming is the long game; pockets are the shortcut
-const O2W={6:.0045,11:.0008,12:.002,13:.0035,14:0};
+const O2W={6:.0045,11:.0008,12:.002,13:.0035,14:0,21:.0015};
 const GROW={11:{next:12,p:1/40},12:{next:13,p:1/60},13:{next:0,p:1/90}}; // shrub grows a tree
 const POCKET_MAX=2000; // largest air volume a seal can pressurize
 const terraMap=new Map(), encCache=new Map(), lightCache=new Map();
@@ -2178,10 +2184,11 @@ function updateTerraHUD(){
   add('goal','→ '+nextGoal());
 }
 // Once the world is warm (≥5°C) and the air is thickening (≥8% O₂), life seeds
-// itself: moss, shrubs and tree canopies drop lichen onto nearby bare regolith.
-// Two brakes keep it from snowballing: seeds refuse crowded ground, and at most
-// a couple take root planet-wide per second — creep, not carpet.
-const SPREAD={6:1/600,12:1/450,13:1/350}; // chance per block per second
+// itself — but only as WILD GREENS, a ground cover that never grows taller.
+// Trees stay player-made: only hand-planted lichen climbs the growth ladder.
+// Two brakes keep the greening from snowballing: seeds refuse crowded ground,
+// and at most a couple take root planet-wide per second — creep, not carpet.
+const SPREAD={6:1/600,12:1/450,13:1/350,21:1/500}; // chance per block per second
 function crowded(x,y,z){ // ≥4 plants in the surrounding 5×5×5 = thick enough
   let n=0;
   for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++) for(let dz=-2;dz<=2;dz++)
@@ -2212,7 +2219,7 @@ setInterval(()=>{
           while(ty>y-7&&getBlock(tx,ty-1,tz)===0) ty--; // the seed falls to ground
           const below=getBlock(tx,ty-1,tz);
           if((below===1||below===15)&&getBlock(tx,ty,tz)===0&&!crowded(tx,ty,tz)){
-            setBlock(tx,ty,tz,11); seeds--;
+            setBlock(tx,ty,tz,WILD); seeds--; // ground cover only — never a tree
           }
         }
       }
