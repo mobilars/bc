@@ -19,6 +19,7 @@ You crash-land on a dead red rock: thin dark sky, −58°C, frozen lakes, buried
 | `1`–`0` or scroll wheel | pick block |
 | `E` | inventory — all your items, with crafting |
 | `H` | field guide — what every block looks like, does, and costs |
+| `L` | launch a trade run to Aurelia (standing at the lander) |
 | `C` | craft the selected block |
 | `T` or `Enter` | chat (multiplayer) |
 | `G` | creative mode (infinite blocks) |
@@ -65,6 +66,8 @@ The planet's O₂/temperature are computed deterministically from the shared blo
 - **<25%**: alarm pips + reddening screen edges. **<20%: exhausted** — you cannot mine or place blocks, walk at half speed, jump weakly. **<10%**: critical alarm. **0%**: blackout, revived at the lander.
 
 **Grazers** — craftable life (2 lichen + 1 ice), **only when the planet is >0°C with ≥10% O₂**. Placing one sets its den; a fuzzy critter hops around within ~5 blocks of it, chirping when you're near. Mine the den to pick the grazer back up. One critter per den — place several for a herd.
+
+**The starship & Aurelia** — the crashed lander doubles as the colony's starship. Stand on its pad and press `L` (or 🚀 in the inventory) to fly to **Aurelia**, the homeworld's orbital market. Each round trip burns **2 plutonium** as fuel. At the market you sell colony goods and buy industrial stock for **credits (¢)**, which persist in your save — the station pays cheap and charges dear (roughly 2×), so pick your cargo: exotic organics (lichen 4¢, grazers 15¢) earn the most, and buying plutonium at 14¢ can beat mining once your greenhouse exports flow. Fly home and you're back on the pad.
 
 **Beacons** — craftable waymarkers (2 glass + 1 basalt): a lamp block that shines the same gold locator beam as the crashed lander's recharge station, visible across the terrain. Mark your greenhouse, your mine, your way home. (Basalt, ice and plutonium aren't on the hotbar — they live in your inventory as crafting ingredients; press `E` to see them.)
 
